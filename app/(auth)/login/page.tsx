@@ -20,33 +20,40 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
+      console.log('🔐 Attempting login with:', email)
+      
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+        email: email.trim(),
+        password: password.trim(),
       })
 
       if (signInError) {
-        console.error('Sign in error:', signInError)
+        console.error('❌ Sign in error:', signInError)
         setError(signInError.message || 'Invalid email or password')
         setLoading(false)
         return
       }
 
       if (!data.session) {
-        console.error('No session returned')
-        setError('No session returned. Please try again.')
+        console.error('❌ No session')
+        setError('No session returned')
         setLoading(false)
         return
       }
 
-      console.log('✅ Login successful:', data.user?.email)
+      console.log('✅ Login successful! User:', data.user?.email)
+      console.log('✅ Session:', data.session.access_token.substring(0, 20) + '...')
+      
+      // Даём Supabase время установить cookies
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
       console.log('📍 Redirecting to:', redirect)
       
-      // Используем router.push - это более надежно в Next.js
-      await router.push(redirect)
+      // Используй simple redirect
+      router.push(redirect)
       
     } catch (err) {
-      console.error('Login error:', err)
+      console.error('❌ Login error:', err)
       setError(err instanceof Error ? err.message : 'Login failed')
       setLoading(false)
     }

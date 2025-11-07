@@ -44,13 +44,13 @@ export default function LoginPage() {
       console.log('✅ Login successful! User:', data.user?.email)
       console.log('✅ Session:', data.session.access_token.substring(0, 20) + '...')
       
-      // Даём Supabase время установить cookies
+      // Даём время на установку cookies
       await new Promise(resolve => setTimeout(resolve, 500))
       
       console.log('📍 Redirecting to:', redirect)
       
-      // Используй simple redirect
-      router.push(redirect)
+      // ✅ ИСПОЛЬЗУЕМ window.location.href - гарантированный редирект!
+      window.location.href = redirect
       
     } catch (err) {
       console.error('❌ Login error:', err)

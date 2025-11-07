@@ -20,34 +20,98 @@ export default function DashboardLayout({
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [userEmail, setUserEmail] = useState<string>('')
   const [loading, setLoading] = useState(true)
+  const [isAuthed, setIsAuthed] = useState(false)
+  const [error, setError] = useState<string>('')
   const router = useRouter()
   const pathname = usePathname()
 
+  // ✅ AUTH CHECK ON MOUNT
   useEffect(() => {
-    const fetchUser = async () => {
+    const checkAuthAndFetchUser = async () => {
       try {
+        // Check if session exists
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession()
+
+        if (sessionError) {
+          console.error('❌ Session error:', sessionError)
+          setError('Session error')
+          setIsAuthed(false)
+          setLoading(false)
+          return
+        }
+
+        if (!session) {
+          console.log('❌ No session found, redirecting to login')
+          setIsAuthed(false)
+          setLoading(false)
+          // Redirect after small delay to ensure state updates
+          setTimeout(() => {
+            router.push(`/login?redirect=${pathname}`)
+          }, 100)
+          return
+        }
+
+        console.log('✅ Session found:', session.user?.email)
+        setIsAuthed(true)
+
+        // Fetch user info
         const {
           data: { user },
+          error: userError,
         } = await supabase.auth.getUser()
-        if (user?.email) {
+
+        if (userError) {
+          console.error('❌ User error:', userError)
+          setError('Could not fetch user')
+        } else if (user?.email) {
+          console.log('✅ User loaded:', user.email)
           setUserEmail(user.email)
         }
       } catch (error) {
-        console.error('Error fetching user:', error)
+        console.error('❌ Auth check error:', error)
+        setError(error instanceof Error ? error.message : 'Unknown error')
+        setIsAuthed(false)
       } finally {
         setLoading(false)
       }
     }
 
-    fetchUser()
-  }, [])
+    checkAuthAndFetchUser()
+
+    // ✅ LISTEN FOR AUTH CHANGES
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('🔄 Auth state changed:', event, session?.user?.email)
+      if (!session) {
+        setIsAuthed(false)
+        router.push('/login')
+      } else {
+        setIsAuthed(true)
+        if (session.user?.email) {
+          setUserEmail(session.user.email)
+        }
+      }
+    })
+
+    return () => {
+      subscription?.unsubscribe()
+    }
+  }, [router, pathname])
 
   const handleLogout = async () => {
     try {
-      await supabase.auth.signOut()
+      console.log('🚪 Logging out...')
+      const { error } = await supabase.auth.signOut()
+      if (error) throw error
+      console.log('✅ Logged out successfully')
       router.push('/login')
     } catch (error) {
-      console.error('Logout error:', error)
+      console.error('❌ Logout error:', error)
+      setError('Logout failed')
     }
   }
 
@@ -59,7 +123,42 @@ export default function DashboardLayout({
     { href: '/profile', label: 'Settings', icon: '⚙️' },
   ]
 
-  const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/')
+  const isActive = (href: string) =>
+    pathname === href || pathname.startsWith(href + '/')
+
+  // ✅ SHOW LOADING STATE
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-black via-slate-900 to-black flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+          <p className="mt-4 text-gray-400">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // ✅ SHOW ERROR STATE
+  if (error && !isAuthed) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-black via-slate-900 to-black flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-400 mb-4">Error: {error}</p>
+          <button
+            onClick={() => router.push('/login')}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+          >
+            Go to Login
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // ✅ PREVENT RENDERING IF NOT AUTHED
+  if (!isAuthed) {
+    return null
+  }
 
   return (
     <div className="bg-black text-white min-h-screen">
@@ -99,7 +198,7 @@ export default function DashboardLayout({
           {/* Right Side - Profile & Logout */}
           <div className="flex items-center gap-2 sm:gap-4">
             {/* User Email (hidden on mobile) */}
-            {!loading && userEmail && (
+            {userEmail && (
               <div className="hidden sm:flex items-center text-sm text-gray-400">
                 <span className="truncate max-w-xs">{userEmail}</span>
               </div>

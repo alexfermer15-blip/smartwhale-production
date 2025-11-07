@@ -13,11 +13,16 @@ interface CryptoPrice {
   volume: number
 }
 
+interface HistoricalData {
+  date: string
+  price: number
+}
+
 export default function DashboardPage() {
   const [prices, setPrices] = useState<CryptoPrice[]>([])
-  const [chartData, setChartData] = useState([])
+  const [chartData, setChartData] = useState<HistoricalData[]>([])
   const [loading, setLoading] = useState(true)
-  const [portfolio, setPortfolio] = useState({
+  const [portfolio] = useState({
     btc: 0.5,
     eth: 5,
     sol: 100,
@@ -141,7 +146,7 @@ export default function DashboardPage() {
                 <YAxis stroke="#94a3b8" />
                 <Tooltip
                   contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569' }}
-                  formatter={(value) => `$${value.toLocaleString()}`}
+                  formatter={(value) => `$${(value as number).toLocaleString()}`}
                 />
                 <Line
                   type="monotone"

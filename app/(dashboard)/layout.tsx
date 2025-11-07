@@ -2,6 +2,8 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
+import { supabase } from '@/lib/supabase'
+import { useRouter } from 'next/navigation'
 
 export default function DashboardLayout({
   children,
@@ -9,6 +11,16 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const router = useRouter()
+
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut()
+      router.push('/login')
+    } catch (error) {
+      console.error('Logout error:', error)
+    }
+  }
 
   return (
     <div className="bg-black text-white min-h-screen">
@@ -27,8 +39,17 @@ export default function DashboardLayout({
           </Link>
 
           <div className="flex items-center gap-4">
-            <button className="w-10 h-10 rounded-full bg-blue-600 hover:bg-blue-700 transition flex items-center justify-center text-white font-bold">
-              U
+            <Link
+              href="/profile"
+              className="w-10 h-10 rounded-full bg-blue-600 hover:bg-blue-700 transition flex items-center justify-center text-white font-bold text-sm"
+            >
+              👤
+            </Link>
+            <button
+              onClick={handleLogout}
+              className="text-red-400 hover:text-red-300 text-sm font-medium transition"
+            >
+              Logout
             </button>
           </div>
         </div>
@@ -49,25 +70,25 @@ export default function DashboardLayout({
               📊 Dashboard
             </Link>
             <Link
-              href="#"
+              href="/whale-tracker"
               className="block px-4 py-3 rounded-lg text-gray-400 hover:text-white hover:bg-slate-800/50 transition"
             >
               🐋 Whale Tracker
             </Link>
             <Link
-              href="#"
+              href="/portfolio"
               className="block px-4 py-3 rounded-lg text-gray-400 hover:text-white hover:bg-slate-800/50 transition"
             >
               📈 Portfolio
             </Link>
             <Link
-              href="#"
+              href="/alerts"
               className="block px-4 py-3 rounded-lg text-gray-400 hover:text-white hover:bg-slate-800/50 transition"
             >
               🔔 Alerts
             </Link>
             <Link
-              href="#"
+              href="/profile"
               className="block px-4 py-3 rounded-lg text-gray-400 hover:text-white hover:bg-slate-800/50 transition"
             >
               ⚙️ Settings
@@ -75,7 +96,10 @@ export default function DashboardLayout({
 
             <hr className="border-slate-700 my-4" />
 
-            <button className="w-full px-4 py-3 rounded-lg bg-red-600/20 border border-red-600/50 text-red-400 hover:bg-red-600/30 transition text-left">
+            <button
+              onClick={handleLogout}
+              className="w-full px-4 py-3 rounded-lg bg-red-600/20 border border-red-600/50 text-red-400 hover:bg-red-600/30 transition text-left"
+            >
               🚪 Logout
             </button>
           </nav>

@@ -4,12 +4,21 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Missing Supabase environment variables')
+  console.error('❌ Missing Supabase environment variables')
 }
 
+// ✅ ВАЖНО: Включаем persistence и auto-refresh!
 export const supabase = createClient(
   supabaseUrl || '',
-  supabaseAnonKey || ''
+  supabaseAnonKey || '',
+  {
+    auth: {
+      persistSession: true, // ✅ СОХРАНЯТЬ СЕССИЮ!
+      autoRefreshToken: true, // ✅ АВТООБНОВЛЯТЬ TOKEN!
+      detectSessionInUrl: true, // ✅ ДЕТЕКТИТЬ СЕССИЮ В URL!
+      flowType: 'pkce', // ✅ ИСПОЛЬЗУЙ PKCE FLOW!
+    },
+  }
 )
 
 // Auth functions

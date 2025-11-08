@@ -1,10 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { cookies } from 'next/headers'
 
 function isValidEthereumAddress(address: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(address)
@@ -12,7 +8,9 @@ function isValidEthereumAddress(address: string): boolean {
 
 export async function GET() {
   try {
+    const supabase = createRouteHandlerClient({ cookies })
     const { data: { user } } = await supabase.auth.getUser()
+
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -26,13 +24,16 @@ export async function GET() {
     if (error) throw error
     return NextResponse.json({ success: true, data })
   } catch (error) {
+    console.error('Error:', error)
     return NextResponse.json({ error: 'Failed to fetch' }, { status: 500 })
   }
 }
 
 export async function POST(request: Request) {
   try {
+    const supabase = createRouteHandlerClient({ cookies })
     const { data: { user } } = await supabase.auth.getUser()
+
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -63,13 +64,16 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, data: data[0] }, { status: 201 })
   } catch (error) {
+    console.error('Error:', error)
     return NextResponse.json({ error: 'Failed to add' }, { status: 500 })
   }
 }
 
 export async function DELETE(request: Request) {
   try {
+    const supabase = createRouteHandlerClient({ cookies })
     const { data: { user } } = await supabase.auth.getUser()
+
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -90,6 +94,7 @@ export async function DELETE(request: Request) {
     if (error) throw error
     return NextResponse.json({ success: true })
   } catch (error) {
+    console.error('Error:', error)
     return NextResponse.json({ error: 'Failed to delete' }, { status: 500 })
   }
 }

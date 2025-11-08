@@ -12,11 +12,13 @@ interface CustomWhale {
 }
 
 interface RealWhale {
+  rank: number
   address: string
   balance: number
-  chainId: number
+  usdValue: number
   transactions: number
-  verified: boolean
+  label: string
+  lastUpdate: string
 }
 
 export default function WhaleTrackerPage() {
@@ -45,10 +47,13 @@ export default function WhaleTrackerPage() {
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch('/api/whales/real?action=top')
+      const response = await fetch('/api/whales/real?action=top&limit=50')
       const json = await response.json()
+      
       if (json.success && json.data) {
-        setWhales(json.data.slice(0, 10))
+        setWhales(json.data)
+      } else {
+        setError(json.error || 'Failed to fetch whale data')
       }
     } catch (err) {
       setError(`Error: ${err instanceof Error ? err.message : 'Unknown error'}`)
@@ -104,6 +109,12 @@ export default function WhaleTrackerPage() {
     fetchRealWhales()
   }, [])
 
+  // Вычисляем общую стоимость
+  const totalValue = whales.reduce((sum, whale) => sum + (whale.usdValue || 0), 0)
+  const totalValueFormatted = totalValue > 1e9 
+    ? `$${(totalValue / 1e9).toFixed(1)}B+` 
+    : `$${(totalValue / 1e6).toFixed(0)}M+`
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -142,13 +153,13 @@ export default function WhaleTrackerPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-6">
           <p className="text-gray-400 text-sm mb-2">Total Value Tracked</p>
-          <p className="text-3xl font-bold text-white">$2.4B+</p>
+          <p className="text-3xl font-bold text-white">{totalValueFormatted}</p>
           <p className="text-green-400 text-sm mt-2">↑ Real ETH Holders</p>
         </div>
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-6">
           <p className="text-gray-400 text-sm mb-2">Whales Tracked</p>
           <p className="text-3xl font-bold text-white">{whales.length}</p>
-          <p className="text-blue-400 text-sm mt-2">🔄 Live Updates</p>
+          <p className="text-blue-400 text-sm mt-2">📡 Live Updates</p>
         </div>
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-6">
           <p className="text-gray-400 text-sm mb-2">Market Impact</p>
@@ -210,6 +221,9 @@ export default function WhaleTrackerPage() {
                     #
                   </th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
+                    Label
+                  </th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
                     Wallet Address
                   </th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
@@ -226,34 +240,42 @@ export default function WhaleTrackerPage() {
               <tbody className="divide-y divide-slate-700/50">
                 {loading ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center text-gray-400">
+                    <td colSpan={6} className="px-6 py-8 text-center text-gray-400">
                       ⏳ Loading real whale data from Etherscan...
                     </td>
                   </tr>
                 ) : whales.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center text-gray-400">
+                    <td colSpan={6} className="px-6 py-8 text-center text-gray-400">
                       ℹ️ No whale data available. Check your Etherscan API key in .env.local
                     </td>
                   </tr>
                 ) : (
                   whales.map((whale, i) => (
-                    <tr key={i} className="hover:bg-slate-700/20 transition">
+                    <tr key={whale.address} className="hover:bg-slate-700/20 transition">
                       <td className="px-6 py-4 text-sm text-gray-400 font-semibold">
-                        {i + 1}
+                        {whale.rank || i + 1}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-purple-400 font-medium">
+                        {whale.label || 'Unknown'}
                       </td>
                       <td className="px-6 py-4 text-sm text-white font-mono">
-                        {whale.address.substring(0, 10)}...
-                        {whale.address.slice(-8)}
+                        {whale.address?.substring(0, 6)}...
+                        {whale.address?.slice(-4)}
                       </td>
                       <td className="px-6 py-4 text-sm text-blue-400 font-semibold">
-                        {whale.balance.toFixed(2)} ETH
+                        {whale.balance?.toLocaleString(undefined, { 
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2 
+                        }) || '0.00'} ETH
                       </td>
                       <td className="px-6 py-4 text-sm text-green-400 font-semibold">
-                        ${(whale.balance * 45000).toLocaleString()}
+                        ${whale.usdValue?.toLocaleString(undefined, { 
+                          maximumFractionDigits: 0 
+                        }) || '0'}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-300">
-                        {whale.transactions.toLocaleString()}
+                        {whale.transactions?.toLocaleString() || '0'}
                       </td>
                     </tr>
                   ))
@@ -267,7 +289,7 @@ export default function WhaleTrackerPage() {
       {/* Data Source */}
       <div className="bg-slate-800/30 border border-slate-700 rounded-lg p-4 text-center">
         <p className="text-gray-400 text-sm">
-          📊 Data source: Etherscan API • Updated in real-time • Network: Ethereum (Chain ID: 1)
+          📊 Data source: Etherscan API V2 • Updated in real-time • Network: Ethereum (Chain ID: 1)
         </p>
       </div>
 

@@ -24,7 +24,6 @@ export default function AddWhaleModal({
     e.preventDefault()
     setError('')
 
-    // Валидация
     if (!address.trim()) {
       setError('Address is required')
       return
@@ -42,7 +41,6 @@ export default function AddWhaleModal({
         notes,
       })
 
-      // Очистка формы
       setAddress('')
       setName('')
       setNotes('')
@@ -65,7 +63,6 @@ export default function AddWhaleModal({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Address */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Wallet Address *
@@ -82,7 +79,6 @@ export default function AddWhaleModal({
             </p>
           </div>
 
-          {/* Name */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Whale Name
@@ -96,7 +92,6 @@ export default function AddWhaleModal({
             />
           </div>
 
-          {/* Notes */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Notes
@@ -110,14 +105,12 @@ export default function AddWhaleModal({
             />
           </div>
 
-          {/* Error */}
           {error && (
             <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-3 text-red-300 text-sm">
               ❌ {error}
             </div>
           )}
 
-          {/* Buttons */}
           <div className="flex gap-3 pt-4">
             <button
               type="button"

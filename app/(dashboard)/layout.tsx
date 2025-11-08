@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter, usePathname } from 'next/navigation'
+import NotificationsPanel from './notifications-panel'
 
 interface NavItem {
   href: string
@@ -118,6 +119,8 @@ export default function DashboardLayout({
   const navItems: NavItem[] = [
     { href: '/dashboard', label: 'Dashboard', icon: '📊' },
     { href: '/whale-tracker', label: 'Whale Tracker', icon: '🐋', badge: 3 },
+    { href: '/watchlist', label: 'My Watchlist', icon: '⭐' }, 
+    { href: '/whale-activity', label: 'Activity Feed', icon: '📡' },
     { href: '/portfolio', label: 'Portfolio', icon: '📈' },
     { href: '/alerts', label: 'Alerts', icon: '🔔', badge: 2 },
     { href: '/profile', label: 'Settings', icon: '⚙️' },
@@ -195,8 +198,11 @@ export default function DashboardLayout({
             <span>SmartWhale</span>
           </Link>
 
-          {/* Right Side - Profile & Logout */}
+          {/* Right Side - Notifications, Profile & Logout */}
           <div className="flex items-center gap-2 sm:gap-4">
+            {/* Notifications Panel */}
+            <NotificationsPanel />
+
             {/* User Email (hidden on mobile) */}
             {userEmail && (
               <div className="hidden sm:flex items-center text-sm text-gray-400">
@@ -315,3 +321,4 @@ export default function DashboardLayout({
     </div>
   )
 }
+

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import AddWhaleModal from '../components/add-whale-modal'
 
 interface CustomWhale {
@@ -22,6 +23,7 @@ interface RealWhale {
 }
 
 export default function WhaleTrackerPage() {
+  const router = useRouter()
   const [whales, setWhales] = useState<RealWhale[]>([])
   const [customWhales, setCustomWhales] = useState<CustomWhale[]>([])
   const [loading, setLoading] = useState(false)
@@ -29,7 +31,6 @@ export default function WhaleTrackerPage() {
   const [showModal, setShowModal] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Загрузи добавленных китов
   const fetchCustomWhales = async () => {
     try {
       const response = await fetch('/api/whales/custom')
@@ -42,14 +43,12 @@ export default function WhaleTrackerPage() {
     }
   }
 
-  // Загрузи реальных китов
   const fetchRealWhales = async () => {
     setLoading(true)
     setError(null)
     try {
       const response = await fetch('/api/whales/real?action=top&limit=50')
       const json = await response.json()
-      
       if (json.success && json.data) {
         setWhales(json.data)
       } else {
@@ -62,12 +61,7 @@ export default function WhaleTrackerPage() {
     }
   }
 
-  // Добавь нового кита
-  const handleAddWhale = async (data: {
-    address: string
-    name: string
-    notes: string
-  }) => {
+  const handleAddWhale = async (data: { address: string; name: string; notes: string }) => {
     setIsSubmitting(true)
     try {
       const response = await fetch('/api/whales/custom', {
@@ -87,7 +81,6 @@ export default function WhaleTrackerPage() {
     }
   }
 
-  // Удали кита
   const handleDeleteWhale = async (whaleId: string) => {
     if (!confirm('Are you sure?')) return
 
@@ -109,11 +102,9 @@ export default function WhaleTrackerPage() {
     fetchRealWhales()
   }, [])
 
-  // Вычисляем общую стоимость
   const totalValue = whales.reduce((sum, whale) => sum + (whale.usdValue || 0), 0)
-  const totalValueFormatted = totalValue > 1e9 
-    ? `$${(totalValue / 1e9).toFixed(1)}B+` 
-    : `$${(totalValue / 1e6).toFixed(0)}M+`
+  const totalValueFormatted =
+    totalValue > 1e9 ? `$${(totalValue / 1e9).toFixed(1)}B+` : `$${(totalValue / 1e6).toFixed(0)}M+`
 
   return (
     <div className="space-y-8">
@@ -121,9 +112,7 @@ export default function WhaleTrackerPage() {
       <div className="flex justify-between items-start">
         <div>
           <h1 className="text-3xl font-bold text-white mb-2">Real Whale Tracker</h1>
-          <p className="text-gray-400">
-            Track real whales + add custom addresses
-          </p>
+          <p className="text-gray-400">Track real whales + add custom addresses</p>
         </div>
         <div className="flex gap-3">
           <button
@@ -142,11 +131,8 @@ export default function WhaleTrackerPage() {
         </div>
       </div>
 
-      {/* Error Message */}
       {error && (
-        <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-4 text-red-300">
-          ❌ {error}
-        </div>
+        <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-4 text-red-300">❌ {error}</div>
       )}
 
       {/* Stats */}
@@ -179,10 +165,7 @@ export default function WhaleTrackerPage() {
           <h2 className="text-xl font-bold text-white">📌 Your Custom Whales</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {customWhales.map((whale) => (
-              <div
-                key={whale.id}
-                className="bg-slate-800/50 border border-green-500/30 rounded-lg p-4"
-              >
+              <div key={whale.id} className="bg-slate-800/50 border border-green-500/30 rounded-lg p-4">
                 <div className="flex justify-between items-start mb-2">
                   <div>
                     <p className="text-white font-semibold">{whale.name}</p>
@@ -198,9 +181,7 @@ export default function WhaleTrackerPage() {
                     ✕ Delete
                   </button>
                 </div>
-                {whale.notes && (
-                  <p className="text-gray-400 text-sm">{whale.notes}</p>
-                )}
+                {whale.notes && <p className="text-gray-400 text-sm">{whale.notes}</p>}
               </div>
             ))}
           </div>
@@ -209,32 +190,20 @@ export default function WhaleTrackerPage() {
 
       {/* Real Whales Section */}
       <div className="space-y-3">
-        <h2 className="text-xl font-bold text-white">
-          🌊 Real ETH Whales (Etherscan)
-        </h2>
+        <h2 className="text-xl font-bold text-white">🌊 Real ETH Whales (Etherscan)</h2>
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-slate-900/50 border-b border-slate-700/50">
                 <tr>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
-                    #
-                  </th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
-                    Label
-                  </th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">#</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-purple-400">Label</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-white font-mono">
                     Wallet Address
                   </th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
-                    ETH Balance
-                  </th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
-                    USD Value
-                  </th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
-                    Transactions
-                  </th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-blue-400">ETH Balance</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-green-400">USD Value</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Transactions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-700/50">
@@ -252,10 +221,12 @@ export default function WhaleTrackerPage() {
                   </tr>
                 ) : (
                   whales.map((whale, i) => (
-                    <tr key={whale.address} className="hover:bg-slate-700/20 transition">
-                      <td className="px-6 py-4 text-sm text-gray-400 font-semibold">
-                        {whale.rank || i + 1}
-                      </td>
+                    <tr
+                      key={whale.address}
+                      className="hover:bg-slate-700/20 transition cursor-pointer"
+                      onClick={() => router.push(`/whale/${whale.address}`)}
+                    >
+                      <td className="px-6 py-4 text-sm text-gray-400 font-semibold">{whale.rank || i + 1}</td>
                       <td className="px-6 py-4 text-sm text-purple-400 font-medium">
                         {whale.label || 'Unknown'}
                       </td>
@@ -264,14 +235,16 @@ export default function WhaleTrackerPage() {
                         {whale.address?.slice(-4)}
                       </td>
                       <td className="px-6 py-4 text-sm text-blue-400 font-semibold">
-                        {whale.balance?.toLocaleString(undefined, { 
+                        {whale.balance?.toLocaleString(undefined, {
                           minimumFractionDigits: 2,
-                          maximumFractionDigits: 2 
-                        }) || '0.00'} ETH
+                          maximumFractionDigits: 2,
+                        }) || '0.00'}{' '}
+                        ETH
                       </td>
                       <td className="px-6 py-4 text-sm text-green-400 font-semibold">
-                        ${whale.usdValue?.toLocaleString(undefined, { 
-                          maximumFractionDigits: 0 
+                        $
+                        {whale.usdValue?.toLocaleString(undefined, {
+                          maximumFractionDigits: 0,
                         }) || '0'}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-300">
@@ -293,7 +266,6 @@ export default function WhaleTrackerPage() {
         </p>
       </div>
 
-      {/* Modal */}
       <AddWhaleModal
         isOpen={showModal}
         onClose={() => setShowModal(false)}

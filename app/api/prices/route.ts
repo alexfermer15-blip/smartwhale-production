@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server'
 
-// CoinGecko API endpoint
 const COINGECKO_API = 'https://api.coingecko.com/api/v3'
 
-// Supported tokens mapping
-const TOKEN_IDS = {
+// Token IDs mapping
+const TOKEN_IDS: { [key: string]: string } = {
   btc: 'bitcoin',
   eth: 'ethereum',
   sol: 'solana',
@@ -20,7 +19,7 @@ const TOKEN_IDS = {
   avax: 'avalanche-2',
   atom: 'cosmos',
   dot: 'polkadot',
-} as const
+}
 
 interface CoinGeckoPrice {
   usd: number
@@ -35,15 +34,15 @@ interface CoinGeckoResponse {
 
 export async function GET(request: Request) {
   try {
-    // Parse query params
     const { searchParams } = new URL(request.url)
     const tokensParam = searchParams.get('tokens') || 'bitcoin,ethereum'
     
-    // Validate and map token IDs
+    // Validate tokens - ИСПРАВЛЕНО: убрали строгую типизацию
+    const validTokenIds = Object.values(TOKEN_IDS)
     const requestedTokens = tokensParam
       .split(',')
       .map(t => t.trim().toLowerCase())
-      .filter(t => Object.values(TOKEN_IDS).includes(t))
+      .filter(t => validTokenIds.includes(t)) // ✅ Теперь работает
       .join(',')
 
     if (!requestedTokens) {
@@ -56,12 +55,11 @@ export async function GET(request: Request) {
       )
     }
 
-    // Fetch from CoinGecko
     const url = `${COINGECKO_API}/simple/price?ids=${requestedTokens}&vs_currencies=usd&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true`
     
     const response = await fetch(url, {
       next: { 
-        revalidate: 60, // Cache for 60 seconds
+        revalidate: 60,
         tags: ['crypto-prices']
       },
       headers: {
@@ -73,7 +71,6 @@ export async function GET(request: Request) {
       const errorText = await response.text()
       console.error('CoinGecko API error:', response.status, errorText)
       
-      // Rate limit handling
       if (response.status === 429) {
         return NextResponse.json(
           { 
@@ -98,7 +95,6 @@ export async function GET(request: Request) {
     }> = {}
 
     Object.entries(data).forEach(([coinId, priceData]) => {
-      // Find short symbol from TOKEN_IDS
       const symbol = Object.entries(TOKEN_IDS).find(
         ([_, id]) => id === coinId
       )?.[0] || coinId
@@ -131,7 +127,7 @@ export async function GET(request: Request) {
   }
 }
 
-// POST endpoint for batch price fetching (optional)
+// POST endpoint
 export async function POST(request: Request) {
   try {
     const body = await request.json()
@@ -144,9 +140,8 @@ export async function POST(request: Request) {
       )
     }
 
-    // Convert short symbols to CoinGecko IDs
     const coinGeckoIds = tokens
-      .map(t => TOKEN_IDS[t.toLowerCase() as keyof typeof TOKEN_IDS])
+      .map(t => TOKEN_IDS[t.toLowerCase()])
       .filter(Boolean)
       .join(',')
 

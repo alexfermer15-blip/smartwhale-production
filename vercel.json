@@ -1,6 +1,8 @@
 {
-  "crons": [{
-    "path": "/api/cron/check-alerts",
-    "schedule": "0 * * * *"
-  }]
+  "crons": [
+    {
+      "path": "/api/cron/sync-whales",
+      "schedule": "*/10 * * * *"
+    }
+  ]
 }

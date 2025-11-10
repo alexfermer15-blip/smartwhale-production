@@ -2,15 +2,14 @@
 
 import { useState, useEffect } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { getCryptoPrices, getHistoricalData } from '@/lib/crypto-api'
+import { getSupabaseClient } from '@/lib/supabase/client'
+import Link from 'next/link'
 
 interface CryptoPrice {
   symbol: string
   name: string
   price: number
   change24h: number
-  marketCap: number
-  volume: number
 }
 
 interface HistoricalData {
@@ -18,56 +17,141 @@ interface HistoricalData {
   price: number
 }
 
+interface PortfolioData {
+  totalValue: number
+  totalInvested: number
+  totalGain: number
+  gainPercent: number
+  holdings: Array<{
+    symbol: string
+    name: string
+    amount: number
+    value: number
+    percentage: number
+  }>
+}
+
 export default function DashboardPage() {
   const [prices, setPrices] = useState<CryptoPrice[]>([])
   const [chartData, setChartData] = useState<HistoricalData[]>([])
+  const [portfolio, setPortfolio] = useState<PortfolioData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [portfolio] = useState({
-    btc: 0.5,
-    eth: 5,
-    sol: 100,
-  })
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
 
-  // Получаем данные при загрузке
+  const supabase = getSupabaseClient()
+
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // Получаем текущие цены
-        const cryptoPrices = await getCryptoPrices()
-        setPrices(cryptoPrices)
+    checkAuthAndFetchData()
 
-        // Получаем историю для графика
-        const history = await getHistoricalData('bitcoin')
-        setChartData(history)
-      } catch (error) {
-        console.error('Error fetching data:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
+    // Автообновление каждые 60 секунд
+    const interval = setInterval(() => {
+      fetchLivePrices()
+      fetchPortfolioData()
+    }, 60000)
 
-    fetchData()
-
-    // Обновляем данные каждые 60 секунд
-    const interval = setInterval(fetchData, 60000)
     return () => clearInterval(interval)
   }, [])
 
-  // Расчитываем портфель стоимость
-  const btcPrice = prices[0]?.price || 0
-  const ethPrice = prices[1]?.price || 0
-  const solPrice = prices[2]?.price || 0
+  const checkAuthAndFetchData = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      setIsAuthenticated(!!session)
 
-  const portfolioValue =
-    portfolio.btc * btcPrice + portfolio.eth * ethPrice + portfolio.sol * solPrice
+      await Promise.all([
+        fetchLivePrices(),
+        fetchChartData(),
+        fetchPortfolioData(),
+      ])
+    } catch (error) {
+      console.error('Error fetching data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
-  const previousPortfolioValue =
-    portfolio.btc * (prices[0]?.price || 43250) +
-    portfolio.eth * (prices[1]?.price || 2350) +
-    portfolio.sol * (prices[2]?.price || 103.2)
+  const fetchLivePrices = async () => {
+    try {
+      const response = await fetch('/api/market/prices')
+      if (response.ok) {
+        const data = await response.json()
+        setPrices(data)
+      }
+    } catch (error) {
+      console.error('Error fetching prices:', error)
+    }
+  }
 
-  const change = portfolioValue - previousPortfolioValue
-  const changePercent = ((change / previousPortfolioValue) * 100).toFixed(2)
+  const fetchChartData = async () => {
+    try {
+      const response = await fetch('/api/market/chart')
+      if (response.ok) {
+        const rawData = await response.json()
+        
+        // Преобразуем данные для Recharts
+        const formatted = rawData.map((item: { timestamp: number; price: number }) => ({
+          date: new Date(item.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          price: Math.round(item.price),
+        }))
+        
+        setChartData(formatted)
+      }
+    } catch (error) {
+      console.error('Error fetching chart data:', error)
+    }
+  }
+
+  const fetchPortfolioData = async () => {
+    try {
+      const response = await fetch('/api/whales/portfolio', {
+        credentials: 'include',
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+
+        if (data.tokens && data.tokens.length > 0) {
+          const holdings = data.tokens.map((token: any) => ({
+            symbol: token.tokenId,
+            name: getAssetName(token.tokenId),
+            amount: token.balance,
+            value: token.valueUsd,
+            percentage: (token.valueUsd / data.totalValueUsd) * 100,
+          }))
+
+          setPortfolio({
+            totalValue: data.totalValueUsd || 0,
+            totalInvested: data.totalInvestedUsd || 0,
+            totalGain: data.totalPnlUsd || 0,
+            gainPercent:
+              data.totalInvestedUsd > 0
+                ? ((data.totalValueUsd - data.totalInvestedUsd) / data.totalInvestedUsd) * 100
+                : 0,
+            holdings,
+          })
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching portfolio:', error)
+    }
+  }
+
+  const getAssetName = (symbol: string): string => {
+    const names: Record<string, string> = {
+      BTC: 'Bitcoin',
+      ETH: 'Ethereum',
+      SOL: 'Solana',
+      BNB: 'Binance Coin',
+      ADA: 'Cardano',
+      DOT: 'Polkadot',
+      AVAX: 'Avalanche',
+      MATIC: 'Polygon',
+    }
+    return names[symbol] || symbol
+  }
+
+  const formatPrice = (price: number) => {
+    return price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  }
 
   return (
     <div className="space-y-6">
@@ -83,55 +167,90 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Portfolio Overview - Big Card */}
         <div className="md:col-span-2 lg:col-span-2 bg-slate-800/50 border border-slate-700 rounded-xl p-8 hover:border-blue-600/50 transition">
-          <h2 className="text-lg font-semibold text-gray-400 mb-4">Portfolio Value</h2>
-          <div className="space-y-6">
-            <div>
-              <p className="text-gray-400 text-sm mb-2">Total Value (USD)</p>
-              <h3 className="text-5xl font-bold text-white">
-                ${portfolioValue.toLocaleString('en-US', { maximumFractionDigits: 2 })}
-              </h3>
-            </div>
-            <div className="flex gap-8">
-              <div>
-                <p className="text-gray-400 text-sm mb-1">24h Change</p>
-                <p className={`text-2xl font-bold ${change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {change >= 0 ? '+' : ''}{change.toLocaleString('en-US', { maximumFractionDigits: 2 })} USD
-                </p>
-              </div>
-              <div>
-                <p className="text-gray-400 text-sm mb-1">24h Change %</p>
-                <p className={`text-2xl font-bold ${parseFloat(changePercent) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {parseFloat(changePercent) >= 0 ? '+' : ''}{changePercent}%
-                </p>
-              </div>
-              <div>
-                <p className="text-gray-400 text-sm mb-1">Holdings</p>
-                <p className="text-2xl font-bold text-blue-400">3 coins</p>
-              </div>
-            </div>
+          <div className="flex justify-between items-start mb-4">
+            <h2 className="text-lg font-semibold text-gray-400">Portfolio Value</h2>
+            {isAuthenticated && portfolio && (
+              <Link
+                href="/portfolio"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition text-sm"
+              >
+                View Portfolio
+              </Link>
+            )}
           </div>
+
+          {isAuthenticated && portfolio ? (
+            <div className="space-y-6">
+              <div>
+                <p className="text-gray-400 text-sm mb-2">Total Value (USD)</p>
+                <h3 className="text-5xl font-bold text-white">
+                  ${formatPrice(portfolio.totalValue)}
+                </h3>
+              </div>
+              <div className="grid grid-cols-3 gap-8">
+                <div>
+                  <p className="text-gray-400 text-sm mb-1">Total Invested</p>
+                  <p className="text-2xl font-bold text-white">
+                    ${formatPrice(portfolio.totalInvested)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-400 text-sm mb-1">Total Gain</p>
+                  <p
+                    className={`text-2xl font-bold ${
+                      portfolio.totalGain >= 0 ? 'text-green-400' : 'text-red-400'
+                    }`}
+                  >
+                    {portfolio.totalGain >= 0 ? '+' : ''}${formatPrice(portfolio.totalGain)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-400 text-sm mb-1">Gain %</p>
+                  <p
+                    className={`text-2xl font-bold ${
+                      portfolio.gainPercent >= 0 ? 'text-green-400' : 'text-red-400'
+                    }`}
+                  >
+                    {portfolio.gainPercent >= 0 ? '+' : ''}
+                    {portfolio.gainPercent.toFixed(2)}%
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <p className="text-gray-400 mb-4">Login to view your portfolio</p>
+              <Link
+                href="/login"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition inline-block"
+              >
+                Login
+              </Link>
+            </div>
+          )}
         </div>
 
-        {/* Quick Stats Card */}
+        {/* Holdings Card */}
         <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-8 hover:border-blue-600/50 transition">
           <h2 className="text-lg font-semibold text-gray-400 mb-6">Holdings</h2>
-          <div className="space-y-4">
-            <div>
-              <p className="text-gray-400 text-xs uppercase tracking-wide mb-1">BTC Amount</p>
-              <p className="text-3xl font-bold text-blue-400">{portfolio.btc}</p>
+          {isAuthenticated && portfolio && portfolio.holdings.length > 0 ? (
+            <div className="space-y-4">
+              {portfolio.holdings.slice(0, 3).map((holding) => (
+                <div key={holding.symbol}>
+                  <p className="text-gray-400 text-xs uppercase tracking-wide mb-1">
+                    {holding.name}
+                  </p>
+                  <p className="text-3xl font-bold text-blue-400">{holding.amount}</p>
+                  <p className="text-sm text-gray-500">${formatPrice(holding.value)}</p>
+                </div>
+              ))}
             </div>
-            <div>
-              <p className="text-gray-400 text-xs uppercase tracking-wide mb-1">ETH Amount</p>
-              <p className="text-3xl font-bold text-purple-400">{portfolio.eth}</p>
-            </div>
-            <div>
-              <p className="text-gray-400 text-xs uppercase tracking-wide mb-1">SOL Amount</p>
-              <p className="text-3xl font-bold text-yellow-400">{portfolio.sol}</p>
-            </div>
-          </div>
+          ) : (
+            <p className="text-gray-400 text-center py-8">No holdings</p>
+          )}
         </div>
 
-        {/* Balance History Chart */}
+        {/* Bitcoin Chart */}
         <div className="md:col-span-2 lg:col-span-2 bg-slate-800/50 border border-slate-700 rounded-xl p-8 hover:border-blue-600/50 transition">
           <h2 className="text-lg font-semibold text-gray-400 mb-4">Bitcoin Price (Last 7 Days)</h2>
           {loading ? (
@@ -183,12 +302,11 @@ export default function DashboardPage() {
                         price.change24h >= 0 ? 'text-green-400' : 'text-red-400'
                       }`}
                     >
-                      {price.change24h >= 0 ? '+' : ''}{price.change24h.toFixed(2)}%
+                      {price.change24h >= 0 ? '+' : ''}
+                      {price.change24h.toFixed(2)}%
                     </span>
                   </div>
-                  <p className="text-gray-400">
-                    ${price.price.toLocaleString('en-US', { maximumFractionDigits: 2 })}
-                  </p>
+                  <p className="text-gray-400">${formatPrice(price.price)}</p>
                 </div>
               ))
             ) : (
@@ -200,90 +318,59 @@ export default function DashboardPage() {
         {/* Holdings Breakdown */}
         <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-8 hover:border-blue-600/50 transition">
           <h2 className="text-lg font-semibold text-gray-400 mb-4">Holdings Breakdown</h2>
-          <div className="space-y-4">
-            {prices.length > 0 && (
-              <>
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-white">Bitcoin</span>
-                    <span className="text-blue-400 font-bold">
-                      ${(portfolio.btc * (prices[0]?.price || 0)).toLocaleString('en-US', {
-                        maximumFractionDigits: 2,
-                      })}
-                    </span>
+          {isAuthenticated && portfolio && portfolio.holdings.length > 0 ? (
+            <div className="space-y-4">
+              {portfolio.holdings.slice(0, 3).map((holding, index) => {
+                const colors = ['bg-blue-600', 'bg-purple-600', 'bg-yellow-600']
+                return (
+                  <div key={holding.symbol}>
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-white">{holding.name}</span>
+                      <span className="text-blue-400 font-bold">
+                        ${formatPrice(holding.value)}
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-700/50 rounded-full h-2">
+                      <div
+                        className={`${colors[index % colors.length]} h-2 rounded-full`}
+                        style={{ width: `${holding.percentage}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">{holding.percentage.toFixed(1)}%</p>
                   </div>
-                  <div className="w-full bg-slate-700/50 rounded-full h-2">
-                    <div
-                      className="bg-blue-600 h-2 rounded-full"
-                      style={{
-                        width: `${((portfolio.btc * (prices[0]?.price || 0)) / portfolioValue) * 100}%`,
-                      }}
-                    ></div>
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-white">Ethereum</span>
-                    <span className="text-purple-400 font-bold">
-                      ${(portfolio.eth * (prices[1]?.price || 0)).toLocaleString('en-US', {
-                        maximumFractionDigits: 2,
-                      })}
-                    </span>
-                  </div>
-                  <div className="w-full bg-slate-700/50 rounded-full h-2">
-                    <div
-                      className="bg-purple-600 h-2 rounded-full"
-                      style={{
-                        width: `${((portfolio.eth * (prices[1]?.price || 0)) / portfolioValue) * 100}%`,
-                      }}
-                    ></div>
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-white">Solana</span>
-                    <span className="text-yellow-400 font-bold">
-                      ${(portfolio.sol * (prices[2]?.price || 0)).toLocaleString('en-US', {
-                        maximumFractionDigits: 2,
-                      })}
-                    </span>
-                  </div>
-                  <div className="w-full bg-slate-700/50 rounded-full h-2">
-                    <div
-                      className="bg-yellow-600 h-2 rounded-full"
-                      style={{
-                        width: `${((portfolio.sol * (prices[2]?.price || 0)) / portfolioValue) * 100}%`,
-                      }}
-                    ></div>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
+                )
+              })}
+            </div>
+          ) : (
+            <p className="text-gray-400 text-center py-8">No holdings</p>
+          )}
         </div>
 
-        {/* Whale Tracker */}
+        {/* Whale Alerts */}
         <div className="md:col-span-1 bg-slate-800/50 border border-slate-700 rounded-xl p-8 hover:border-blue-600/50 transition">
-          <h2 className="text-lg font-semibold text-gray-400 mb-4">Whale Alerts</h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold text-gray-400">Whale Alerts</h2>
+            <Link href="/whale-activity" className="text-blue-400 hover:text-blue-300 text-sm">
+              View All →
+            </Link>
+          </div>
           <div className="space-y-3">
             {[
-              { whale: 'Whale #1', action: 'Sold 500 BTC', time: '10m ago', impact: 'high' },
-              { whale: 'Whale #2', action: 'Bought 200 ETH', time: '25m ago', impact: 'medium' },
-              { whale: 'Whale #3', action: 'Moved 1M SOL', time: '1h ago', impact: 'high' },
+              { whale: 'Whale #1', action: 'Sold 500 BTC', time: '10m ago', impact: 'HIGH' },
+              { whale: 'Whale #2', action: 'Bought 200 ETH', time: '25m ago', impact: 'MEDIUM' },
+              { whale: 'Whale #3', action: 'Moved 1M SOL', time: '1h ago', impact: 'HIGH' },
             ].map((item, i) => (
               <div key={i} className="p-3 bg-slate-700/30 rounded-lg border border-slate-700/50">
                 <div className="flex justify-between items-start mb-1">
                   <span className="font-medium text-white">{item.whale}</span>
                   <span
                     className={`text-xs px-2 py-1 rounded ${
-                      item.impact === 'high'
+                      item.impact === 'HIGH'
                         ? 'bg-red-600/20 text-red-400'
                         : 'bg-yellow-600/20 text-yellow-400'
                     }`}
                   >
-                    {item.impact.toUpperCase()}
+                    {item.impact}
                   </span>
                 </div>
                 <p className="text-sm text-gray-400">{item.action}</p>

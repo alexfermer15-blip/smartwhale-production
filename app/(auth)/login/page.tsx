@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { getSupabaseClient } from '@/lib/supabase/client'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
@@ -12,7 +12,9 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const router = useRouter()
   const searchParams = useSearchParams()
-  const redirect = searchParams.get('redirect') || '/dashboard'
+  
+  // ✅ ИСПРАВЛЕНО: читаем redirectTo вместо redirect
+  const redirectTo = searchParams.get('redirectTo') || searchParams.get('redirect') || '/dashboard'
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -22,6 +24,7 @@ export default function LoginPage() {
     try {
       console.log('🔐 Attempting login with:', email)
       
+      const supabase = getSupabaseClient()
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password: password.trim(),
@@ -47,10 +50,10 @@ export default function LoginPage() {
       // Даём время на установку cookies
       await new Promise(resolve => setTimeout(resolve, 500))
       
-      console.log('📍 Redirecting to:', redirect)
+      console.log('📍 Redirecting to:', redirectTo)
       
       // ✅ ИСПОЛЬЗУЕМ window.location.href - гарантированный редирект!
-      window.location.href = redirect
+      window.location.href = redirectTo
       
     } catch (err) {
       console.error('❌ Login error:', err)

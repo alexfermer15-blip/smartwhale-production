@@ -119,6 +119,7 @@ export default function DashboardLayout({
   const navItems: NavItem[] = [
     { href: '/dashboard', label: 'Dashboard', icon: '📊' },
     { href: '/whale-tracker', label: 'Whale Tracker', icon: '🐋', badge: 3 },
+    { href: '/signals', label: 'Trading Signals', icon: '📈', badge: 6 },
     { href: '/watchlist', label: 'My Watchlist', icon: '⭐' }, 
     { href: '/whale-activity', label: 'Activity Feed', icon: '📡' },
     { href: '/portfolio', label: 'Portfolio', icon: '📈' },

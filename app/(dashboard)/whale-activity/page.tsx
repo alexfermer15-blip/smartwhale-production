@@ -1,209 +1,288 @@
+// app/(dashboard)/whale-activity/page.tsx
 'use client'
 
-import { useEffect, useState } from 'react'
-import { createClient } from '@supabase/supabase-js'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import Link from 'next/link'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-const supabase = createClient(supabaseUrl, supabaseKey)
-
-const ETHERSCAN_API_KEY = process.env.NEXT_PUBLIC_ETHERSCAN_API_KEY!
-
-interface WatchlistItem {
-  whale_address: string
-  whale_label: string
+interface Activity {
+  id: string
+  whaleAddress: string
+  whaleLabel: string
+  txHash: string
+  txType: 'buy' | 'sell' | 'transfer'
+  tokenSymbol: string
+  amount: string
+  amountUsd: number
+  fromAddress?: string
+  toAddress?: string
+  blockchain: string
+  severity: 'HIGH' | 'MEDIUM' | 'LOW'
+  timestamp: string
 }
 
-interface Transaction {
-  hash: string
-  from: string
-  to: string
-  value: string
-  timeStamp: string
-  whale_address: string
-  whale_label: string
+interface Stats {
+  total: number
+  totalValueUsd: number
+  highSeverity: number
+  mediumSeverity: number
+  lowSeverity: number
 }
 
 export default function WhaleActivityPage() {
-  const router = useRouter()
-  const [user, setUser] = useState<any>(null)
-  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([])
-  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [activities, setActivities] = useState<Activity[]>([])
+  const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [txTypeFilter, setTxTypeFilter] = useState('all')
+  const [blockchainFilter, setBlockchainFilter] = useState('all')
+  const [severityFilter, setSeverityFilter] = useState('all')
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUser(user)
-      if (user) {
-        fetchWatchlist(user.id)
-      } else {
-        setLoading(false)
-      }
-    })
-  }, [])
+    fetchActivities()
 
-  async function fetchWatchlist(userId: string) {
+    // Автообновление каждые 30 секунд
+    const interval = setInterval(fetchActivities, 30000)
+    return () => clearInterval(interval)
+  }, [txTypeFilter, blockchainFilter, severityFilter])
+
+  const fetchActivities = async () => {
+    setLoading(true)
     try {
-      const response = await fetch(`/api/whales/watchlist?user_id=${userId}`)
-      const json = await response.json()
-      
-      if (json.success) {
-        setWatchlist(json.data)
-        await fetchAllTransactions(json.data)
+      const params = new URLSearchParams({
+        type: txTypeFilter,
+        blockchain: blockchainFilter,
+        severity: severityFilter,
+      })
+
+      const response = await fetch(`/api/whales/activity?${params}`)
+      if (response.ok) {
+        const data = await response.json()
+        setActivities(data.activities)
+        setStats(data.stats)
       }
     } catch (error) {
-      console.error('Error fetching watchlist:', error)
+      console.error('Error fetching activities:', error)
     } finally {
       setLoading(false)
     }
   }
 
-  async function fetchAllTransactions(watchlistItems: WatchlistItem[]) {
-    const allTxs: Transaction[] = []
+  const formatUSD = (value: number) => {
+    return value.toLocaleString('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    })
+  }
 
-    for (const item of watchlistItems) {
-      try {
-        const response = await fetch(
-          `https://api.etherscan.io/api?module=account&action=txlist&address=${item.whale_address}&startblock=0&endblock=99999999&page=1&offset=20&sort=desc&apikey=${ETHERSCAN_API_KEY}`
-        )
-        const data = await response.json()
+  const formatTimeAgo = (timestamp: string) => {
+    const now = Date.now()
+    const then = new Date(timestamp).getTime()
+    const diff = now - then
 
-        if (data.result) {
-          const txs = data.result.map((tx: any) => ({
-            ...tx,
-            whale_address: item.whale_address,
-            whale_label: item.whale_label,
-          }))
-          allTxs.push(...txs)
-        }
-      } catch (error) {
-        console.error(`Error fetching transactions for ${item.whale_address}:`, error)
-      }
+    const minutes = Math.floor(diff / (1000 * 60))
+    const hours = Math.floor(diff / (1000 * 60 * 60))
+
+    if (minutes < 60) {
+      return `${minutes}m ago`
+    } else {
+      return `${hours}h ago`
     }
-
-    // Сортируем по времени
-    allTxs.sort((a, b) => parseInt(b.timeStamp) - parseInt(a.timeStamp))
-    setTransactions(allTxs)
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-gray-400 text-xl">⏳ Loading activity feed...</div>
-      </div>
-    )
+  const getTxTypeColor = (type: string) => {
+    switch (type) {
+      case 'buy':
+        return 'text-green-400'
+      case 'sell':
+        return 'text-red-400'
+      case 'transfer':
+        return 'text-blue-400'
+      default:
+        return 'text-gray-400'
+    }
   }
 
-  if (!user) {
+  const getSeverityBadge = (severity: string) => {
+    switch (severity) {
+      case 'HIGH':
+        return 'bg-red-500/20 text-red-400'
+      case 'MEDIUM':
+        return 'bg-yellow-500/20 text-yellow-400'
+      case 'LOW':
+        return 'bg-blue-500/20 text-blue-400'
+      default:
+        return 'bg-gray-500/20 text-gray-400'
+    }
+  }
+
+  if (loading && activities.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen gap-4">
-        <div className="text-gray-400 text-xl">Sign in to view whale activity feed</div>
+      <div className="flex items-center justify-center h-96">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
       </div>
     )
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 pb-12">
-      <div>
-        <h1 className="text-3xl font-bold text-white mb-2">📊 Whale Activity Feed</h1>
-        <p className="text-gray-400">Real-time transactions from your watchlist</p>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="text-4xl font-bold text-white mb-2">Whale Activity Feed</h1>
+          <p className="text-gray-400">Real-time whale transactions and movements</p>
+        </div>
+        <button
+          onClick={fetchActivities}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition flex items-center gap-2"
+        >
+          🔄 Refresh
+        </button>
       </div>
 
-      {watchlist.length === 0 ? (
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-12 text-center">
-          <div className="text-6xl mb-4">🐋</div>
-          <h3 className="text-xl font-bold text-white mb-2">No Whales in Watchlist</h3>
-          <p className="text-gray-400 mb-4">Add whales to your watchlist to see their activity here</p>
-          <button
-            onClick={() => router.push('/whale-tracker')}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
-          >
-            Go to Whale Tracker
-          </button>
-        </div>
-      ) : (
-        <>
-          {/* Watchlist Summary */}
-          <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-6">
-            <h2 className="text-lg font-bold text-white mb-3">Monitoring {watchlist.length} Whale(s)</h2>
-            <div className="flex flex-wrap gap-2">
-              {watchlist.map((item) => (
-                <button
-                  key={item.whale_address}
-                  onClick={() => router.push(`/whale/${item.whale_address}`)}
-                  className="px-3 py-1 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded text-sm transition"
-                >
-                  {item.whale_label}
-                </button>
-              ))}
-            </div>
+      {/* Stats Cards */}
+      {stats && (
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+          <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6">
+            <p className="text-gray-400 text-sm mb-1">Total Activities</p>
+            <p className="text-3xl font-bold text-white">{stats.total}</p>
           </div>
 
-          {/* Activity Feed */}
-          <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-6">
-            <h2 className="text-xl font-bold text-white mb-4">Recent Activity</h2>
-            
-            {transactions.length === 0 ? (
-              <div className="text-center text-gray-400 py-8">No recent transactions</div>
-            ) : (
-              <div className="space-y-3">
-                {transactions.map((tx, index) => {
-                  const isIncoming = tx.to?.toLowerCase() === tx.whale_address.toLowerCase()
-                  const value = (parseFloat(tx.value) / 1e18).toFixed(4)
-                  
-                  return (
-                    <div
-                      key={`${tx.hash}-${index}`}
-                      className="bg-slate-700/30 border border-slate-600/50 rounded-lg p-4 hover:bg-slate-700/50 transition"
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <span className="text-blue-400 font-semibold">{tx.whale_label}</span>
-                          <span
-                            className={`ml-3 text-xs px-2 py-1 rounded ${
-                              isIncoming
-                                ? 'bg-green-500/20 text-green-400'
-                                : 'bg-red-500/20 text-red-400'
-                            }`}
-                          >
-                            {isIncoming ? '↓ IN' : '↑ OUT'}
-                          </span>
-                        </div>
-                        <span className="text-gray-400 text-sm">
-                          {new Date(parseInt(tx.timeStamp) * 1000).toLocaleString()}
-                        </span>
-                      </div>
-                      
-                      <div className="flex justify-between items-center">
-                        <div className="text-sm">
-                          <span className="text-gray-400">From: </span>
-                          <span className="text-gray-300 font-mono">{tx.from.slice(0, 10)}...</span>
-                          <span className="text-gray-400 mx-2">→</span>
-                          <span className="text-gray-400">To: </span>
-                          <span className="text-gray-300 font-mono">{tx.to.slice(0, 10)}...</span>
-                        </div>
-                        <span className={`font-bold ${isIncoming ? 'text-green-400' : 'text-red-400'}`}>
-                          {value} ETH
-                        </span>
-                      </div>
-                      
-                      <a
-                        href={`https://etherscan.io/tx/${tx.hash}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-400 hover:underline text-xs mt-2 inline-block"
-                      >
-                        View on Etherscan →
-                      </a>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
+          <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6">
+            <p className="text-gray-400 text-sm mb-1">Total Value</p>
+            <p className="text-3xl font-bold text-white">{formatUSD(stats.totalValueUsd)}</p>
           </div>
-        </>
+
+          <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6">
+            <p className="text-gray-400 text-sm mb-1">High Severity</p>
+            <p className="text-3xl font-bold text-red-400">{stats.highSeverity}</p>
+          </div>
+
+          <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6">
+            <p className="text-gray-400 text-sm mb-1">Medium Severity</p>
+            <p className="text-3xl font-bold text-yellow-400">{stats.mediumSeverity}</p>
+          </div>
+
+          <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6">
+            <p className="text-gray-400 text-sm mb-1">Low Severity</p>
+            <p className="text-3xl font-bold text-blue-400">{stats.lowSeverity}</p>
+          </div>
+        </div>
       )}
+
+      {/* Filters */}
+      <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Transaction Type Filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Transaction Type</label>
+            <select
+              value={txTypeFilter}
+              onChange={(e) => setTxTypeFilter(e.target.value)}
+              className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+            >
+              <option value="all">All Types</option>
+              <option value="buy">Buy</option>
+              <option value="sell">Sell</option>
+              <option value="transfer">Transfer</option>
+            </select>
+          </div>
+
+          {/* Blockchain Filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Blockchain</label>
+            <select
+              value={blockchainFilter}
+              onChange={(e) => setBlockchainFilter(e.target.value)}
+              className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+            >
+              <option value="all">All Chains</option>
+              <option value="ethereum">Ethereum</option>
+              <option value="solana">Solana</option>
+              <option value="binance">Binance Smart Chain</option>
+            </select>
+          </div>
+
+          {/* Severity Filter */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Severity</label>
+            <select
+              value={severityFilter}
+              onChange={(e) => setSeverityFilter(e.target.value)}
+              className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+            >
+              <option value="all">All Severities</option>
+              <option value="HIGH">High</option>
+              <option value="MEDIUM">Medium</option>
+              <option value="LOW">Low</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Activity Feed */}
+      <div className="bg-slate-800/50 border border-slate-700 rounded-lg overflow-hidden">
+        <div className="p-4 border-b border-slate-700">
+          <h2 className="text-xl font-bold text-white">Recent Transactions</h2>
+        </div>
+
+        <div className="divide-y divide-slate-700/50">
+          {activities.map((activity) => (
+            <div key={activity.id} className="p-6 hover:bg-slate-700/20 transition">
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <Link
+                      href={`/whale/${activity.whaleAddress}`}
+                      className="text-lg font-semibold text-purple-400 hover:text-purple-300"
+                    >
+                      {activity.whaleLabel}
+                    </Link>
+                    <span
+                      className={`px-2 py-1 rounded text-xs font-semibold ${getSeverityBadge(
+                        activity.severity
+                      )}`}
+                    >
+                      {activity.severity}
+                    </span>
+                  </div>
+
+                  <p className="text-gray-300 mb-2">
+                    <span className={`font-semibold ${getTxTypeColor(activity.txType)}`}>
+                      {activity.txType.toUpperCase()}
+                    </span>{' '}
+                    {activity.amount} {activity.tokenSymbol} •{' '}
+                    <span className="text-white font-semibold">{formatUSD(activity.amountUsd)}</span>
+                  </p>
+
+                  <div className="flex items-center gap-4 text-sm text-gray-500">
+                    <span>TX: {activity.txHash}</span>
+                    <span>•</span>
+                    <span className="capitalize">{activity.blockchain}</span>
+                    <span>•</span>
+                    <span>{formatTimeAgo(activity.timestamp)}</span>
+                  </div>
+                </div>
+
+                <a
+                  href={`https://etherscan.io/tx/${activity.txHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition"
+                >
+                  View on Etherscan
+                </a>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {activities.length === 0 && (
+          <div className="p-12 text-center text-gray-400">
+            No activities found matching your filters
+          </div>
+        )}
+      </div>
     </div>
   )
 }

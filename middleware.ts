@@ -1,34 +1,65 @@
-// middleware.ts
-import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
-import { type NextRequest, NextResponse } from 'next/server'
+import { createServerClient } from '@supabase/ssr'
+import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
-  const pathname = request.nextUrl.pathname
+  // Исключение для публичного прокси (и любых публичных API/статических файлов)
+  if (request.nextUrl.pathname.startsWith('/api/proxy/')) {
+    console.log('PUBLIC PROXY BYPASSED:', request.nextUrl.pathname)
+    return NextResponse.next()
+  }
 
-  // Создаём response
-  const res = NextResponse.next()
+  let supabaseResponse = NextResponse.next({
+    request,
+  });
 
-  // Создаём Supabase клиент для middleware
-  // Это важно для обновления cookies и передачи session в API routes
-  const supabase = createMiddlewareClient({ req: request, res })
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
+          supabaseResponse = NextResponse.next({
+            request,
+          })
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, options)
+          )
+        },
+      },
+    }
+  )
 
-  // Обновляем сессию (это обновит cookies автоматически)
-  await supabase.auth.getSession()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
-  // Добавляем custom header с pathname
-  const requestHeaders = new Headers(request.headers)
-  requestHeaders.set('x-pathname', pathname)
+  // Защищённые маршруты:
+  const protectedPaths = ['/whale-tracker', '/dashboard', '/portfolio', '/alerts', '/settings']
+  const isProtectedPath = protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))
 
-  // Возвращаем response с обновлёнными cookies и headers
-  return NextResponse.next({
-    request: {
-      headers: requestHeaders,
-    },
-    // Важно! Передаём cookies из supabase response
-    headers: res.headers,
-  })
+  if (isProtectedPath && !user) {
+    console.log('PROTECTED REDIRECT TO LOGIN:', request.nextUrl.pathname)
+    const url = request.nextUrl.clone()
+    url.pathname = '/login'
+    return NextResponse.redirect(url)
+  }
+
+  if (request.nextUrl.pathname === '/login' && user) {
+    console.log('LOGIN REDIRECT TO WHALE-TRACKER')
+    const url = request.nextUrl.clone()
+    url.pathname = '/whale-tracker'
+    return NextResponse.redirect(url)
+  }
+
+  return supabaseResponse
 }
 
 export const config = {
-  matcher: ['/((?!_next|_static|_vercel|.*\\..*|public).*)'],
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
 }

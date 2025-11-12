@@ -1,13 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-const supabase = createClient(supabaseUrl, supabaseKey)
 
 const ETHERSCAN_API_KEY = process.env.NEXT_PUBLIC_ETHERSCAN_API_KEY!
 
@@ -23,79 +19,57 @@ interface WatchlistItem {
 
 export default function WatchlistPage() {
   const router = useRouter()
+  const supabase = createClient()
   const [user, setUser] = useState<any>(null)
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
-  // Check API key on mount
   useEffect(() => {
-    if (!ETHERSCAN_API_KEY || ETHERSCAN_API_KEY === 'undefined') {
-      console.error('❌ ETHERSCAN_API_KEY not set!')
-    } else {
-      console.log('✅ ETHERSCAN_API_KEY:', ETHERSCAN_API_KEY.slice(0, 5) + '...')
-    }
+    checkAuth()
   }, [])
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      console.log('👤 User:', user?.email || 'Not signed in')
-      setUser(user)
-      if (user) {
-        fetchWatchlist(user.id)
-      } else {
-        setLoading(false)
-      }
-    })
-  }, [])
+  async function checkAuth() {
+    const { data: { session } } = await supabase.auth.getSession()
+    setUser(session?.user || null)
+    
+    if (session?.user) {
+      await fetchWatchlist(session.user.id)
+    } else {
+      setLoading(false)
+    }
+  }
 
   async function fetchWatchlist(userId: string) {
     setLoading(true)
     try {
-      console.log('🔍 Fetching watchlist for user:', userId)
-      
       const response = await fetch(`/api/whales/watchlist?user_id=${userId}`)
       const json = await response.json()
 
-      console.log('📦 Watchlist response:', json)
-
       if (json.success) {
         const items = json.data as WatchlistItem[]
-        console.log('✅ Fetched', items.length, 'whales')
-        // Fetch current balances for each whale
         await updateBalances(items)
-      } else {
-        console.error('❌ Failed to fetch watchlist:', json.error)
       }
     } catch (error) {
-      console.error('❌ Error fetching watchlist:', error)
+      console.error('Error fetching watchlist:', error)
     } finally {
       setLoading(false)
     }
   }
 
   async function updateBalances(items: WatchlistItem[]) {
-    console.log('🔄 Updating balances for', items.length, 'whales...')
-    
     const updatedItems = await Promise.all(
       items.map(async (item) => {
         try {
-          console.log('🔍 Fetching balance for:', item.whale_address)
-          
-          // ✅ Updated to Etherscan API v2
           const response = await fetch(
             `https://api.etherscan.io/v2/api?chainid=1&module=account&action=balance&address=${item.whale_address}&tag=latest&apikey=${ETHERSCAN_API_KEY}`
           )
           const data = await response.json()
           
-          console.log('📦 Etherscan response for', item.whale_address.slice(0, 10) + '...:', data)
-          
           if (data.status === '1' && data.result) {
             const balance = parseFloat(data.result) / 1e18
-            const ethPrice = 3400 // Replace with real-time price API if needed
+            const ethPrice = 3400
             const usdValue = balance * ethPrice
-
-            console.log('✅ Balance for', item.whale_label + ':', balance, 'ETH, USD:', usdValue)
 
             return {
               ...item,
@@ -103,40 +77,31 @@ export default function WatchlistPage() {
               current_usd_value: usdValue,
               last_updated: new Date().toISOString(),
             }
-          } else {
-            console.warn('⚠️ Invalid Etherscan response for', item.whale_address, ':', data)
-            return {
-              ...item,
-              current_balance: 0,
-              current_usd_value: 0,
-              last_updated: new Date().toISOString(),
-            }
           }
         } catch (error) {
-          console.error(`❌ Error fetching balance for ${item.whale_address}:`, error)
-          return {
-            ...item,
-            current_balance: 0,
-            current_usd_value: 0,
-            last_updated: new Date().toISOString(),
-          }
+          console.error(`Error fetching balance for ${item.whale_address}:`, error)
+        }
+        
+        return {
+          ...item,
+          current_balance: 0,
+          current_usd_value: 0,
+          last_updated: new Date().toISOString(),
         }
       })
     )
 
-    console.log('✅ Updated balances:', updatedItems)
     setWatchlist(updatedItems)
   }
 
   async function removeFromWatchlist(address: string) {
     if (!user) return
 
-    const confirmRemove = confirm(`Remove ${watchlist.find(w => w.whale_address === address)?.whale_label || 'this whale'} from watchlist?`)
+    const whale = watchlist.find(w => w.whale_address === address)
+    const confirmRemove = confirm(`Remove ${whale?.whale_label || 'this whale'} from watchlist?`)
     if (!confirmRemove) return
 
     try {
-      console.log('🗑️ Removing from watchlist:', address)
-      
       const response = await fetch('/api/whales/watchlist', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
@@ -147,29 +112,23 @@ export default function WatchlistPage() {
       })
 
       const json = await response.json()
-      console.log('📤 Remove response:', json)
 
       if (json.success) {
-        console.log('✅ Removed successfully')
-        // Refresh watchlist
-        fetchWatchlist(user.id)
+        await fetchWatchlist(user.id)
       } else {
-        console.error('❌ Failed to remove:', json.error)
         alert('Failed to remove from watchlist')
       }
     } catch (error) {
-      console.error('❌ Error removing from watchlist:', error)
+      console.error('Error removing from watchlist:', error)
       alert('Error removing from watchlist')
     }
   }
 
   async function refreshBalances() {
     if (!user) return
-    console.log('🔄 Refreshing balances...')
     setRefreshing(true)
     await fetchWatchlist(user.id)
     setRefreshing(false)
-    console.log('✅ Refresh complete')
   }
 
   if (loading) {
@@ -188,7 +147,7 @@ export default function WatchlistPage() {
       <div className="flex flex-col items-center justify-center min-h-screen gap-4">
         <div className="text-gray-400 text-xl">Sign in to view your watchlist</div>
         <button
-          onClick={() => router.push('/sign-in')}
+          onClick={() => router.push('/login')}
           className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
         >
           Sign In
@@ -284,7 +243,7 @@ export default function WatchlistPage() {
                   <div className="text-gray-400 text-sm mb-1">Current Balance</div>
                   <div className="text-2xl font-bold text-blue-400">
                     {item.current_balance !== undefined
-                      ? `${item.current_balance.toFixed(2)} ETH`
+                      ? `${item.current_balance.toLocaleString()} ETH`
                       : '...'}
                   </div>
                 </div>
@@ -309,19 +268,13 @@ export default function WatchlistPage() {
               </div>
 
               <div className="flex gap-2 flex-wrap">
-                <Link
-                  href={`/whale/${item.whale_address}`}
-                  className="px-4 py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded transition text-sm"
-                >
-                  View Details →
-                </Link>
                 <a
                   href={`https://etherscan.io/address/${item.whale_address}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-4 py-2 bg-slate-700/50 hover:bg-slate-700 text-gray-300 rounded transition text-sm"
+                  className="px-4 py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded transition text-sm"
                 >
-                  Etherscan ↗
+                  View on Etherscan ↗
                 </a>
               </div>
             </div>

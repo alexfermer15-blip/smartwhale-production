@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { getSupabaseClient } from '@/lib/supabase/client'
+import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 
 interface CryptoPrice {
@@ -38,7 +38,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
 
-  const supabase = getSupabaseClient()
+  // ВАЖНО: использовать createClient!
+  const supabase = createClient()
 
   useEffect(() => {
     checkAuthAndFetchData()
@@ -86,13 +87,11 @@ export default function DashboardPage() {
       const response = await fetch('/api/market/chart')
       if (response.ok) {
         const rawData = await response.json()
-        
         // Преобразуем данные для Recharts
         const formatted = rawData.map((item: { timestamp: number; price: number }) => ({
           date: new Date(item.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
           price: Math.round(item.price),
         }))
-        
         setChartData(formatted)
       }
     } catch (error) {
@@ -105,10 +104,8 @@ export default function DashboardPage() {
       const response = await fetch('/api/whales/portfolio', {
         credentials: 'include',
       })
-
       if (response.ok) {
         const data = await response.json()
-
         if (data.tokens && data.tokens.length > 0) {
           const holdings = data.tokens.map((token: any) => ({
             symbol: token.tokenId,

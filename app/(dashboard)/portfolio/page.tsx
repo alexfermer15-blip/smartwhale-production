@@ -1,8 +1,7 @@
-// app/(dashboard)/portfolio/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getSupabaseClient } from '@/lib/supabase/client'
+import { createClient } from '@/lib/supabase/client'
 import EditAssetModal from './components/EditAssetModal'
 import AddAssetModal from './components/AddAssetModal'
 
@@ -34,17 +33,17 @@ export default function PortfolioPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
-  
-  const supabase = getSupabaseClient()
+
+  // Правильная инициализация Supabase для client компонента
+  const supabase = createClient()
 
   useEffect(() => {
     checkAuthAndFetchPortfolio()
-    
+
     // Автообновление каждую минуту
     const interval = setInterval(() => {
       fetchPortfolio()
     }, 60000)
-    
     return () => clearInterval(interval)
   }, [])
 
@@ -63,18 +62,14 @@ export default function PortfolioPage() {
   const fetchPortfolio = async () => {
     setLoading(true)
     setError(null)
-    
     try {
       const response = await fetch('/api/whales/portfolio', {
         credentials: 'include',
       })
-
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
-
       const data = await response.json()
-      
       if (!data || !data.tokens || data.tokens.length === 0) {
         setAssets([])
         setStats({
@@ -87,21 +82,18 @@ export default function PortfolioPage() {
         })
         return
       }
-
       const apiAssets: Asset[] = data.tokens.map((token: any) => ({
         symbol: token.tokenId,
         name: getAssetName(token.tokenId),
         amount: token.balance,
         price: token.priceUsd,
         value: token.valueUsd,
+        // TODO: использовать реальное поле change24h, если нужно отображать динамику
         change24h: 2.5,
         percentage: data.totalValueUsd > 0 ? (token.valueUsd / data.totalValueUsd) * 100 : 0,
       }))
-
-      // Правильный расчёт Total Invested
       const totalValue = data.totalValueUsd || 0
       const totalInvested = data.totalInvestedUsd || 0
-
       setAssets(apiAssets)
       setStats({
         totalValue,
@@ -156,7 +148,6 @@ export default function PortfolioPage() {
     if (!confirm(`Are you sure you want to delete ${symbol}?`)) {
       return
     }
-
     try {
       const response = await fetch('/api/whales/portfolio/delete', {
         method: 'POST',
@@ -164,7 +155,6 @@ export default function PortfolioPage() {
         credentials: 'include',
         body: JSON.stringify({ symbol }),
       })
-
       if (response.ok) {
         await fetchPortfolio()
       } else {
@@ -185,14 +175,11 @@ export default function PortfolioPage() {
         credentials: 'include',
         body: JSON.stringify({ symbol, amount, buyPrice: price }),
       })
-
       const data = await response.json()
-
       if (!response.ok) {
         alert(data.error || 'Failed to add asset')
         throw new Error(data.error)
       }
-
       await fetchPortfolio()
     } catch (error) {
       console.error('Error adding asset:', error)
@@ -208,7 +195,6 @@ export default function PortfolioPage() {
         credentials: 'include',
         body: JSON.stringify({ symbol, amount, price }),
       })
-
       if (response.ok) {
         await fetchPortfolio()
       } else {
@@ -328,9 +314,7 @@ export default function PortfolioPage() {
         </div>
       )}
 
-      {/* Rest of JSX... (allocation chart, assets table) */}
-      {/* Добавь кнопку Delete в таблицу: */}
-      
+      {/* Таблица */}
       {assets.length > 0 && (
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg overflow-hidden">
           <div className="overflow-x-auto">

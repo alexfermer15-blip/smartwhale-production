@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import EditAssetModal from './components/EditAssetModal'
 import AddAssetModal from './components/AddAssetModal'
+import { AlertButton } from '@/components/AlertButton'
 
 interface Asset {
   symbol: string
@@ -14,7 +15,6 @@ interface Asset {
   change24h: number
   percentage: number
 }
-
 interface PortfolioStats {
   totalValue: number
   totalInvested: number
@@ -34,13 +34,10 @@ export default function PortfolioPage() {
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
 
-  // Правильная инициализация Supabase для client компонента
   const supabase = createClient()
 
   useEffect(() => {
     checkAuthAndFetchPortfolio()
-
-    // Автообновление каждую минуту
     const interval = setInterval(() => {
       fetchPortfolio()
     }, 60000)
@@ -52,8 +49,7 @@ export default function PortfolioPage() {
       const { data: { session } } = await supabase.auth.getSession()
       setIsAuthenticated(!!session)
       await fetchPortfolio()
-    } catch (err) {
-      console.error('Auth check error:', err)
+    } catch {
       setIsAuthenticated(false)
       await fetchPortfolio()
     }
@@ -88,7 +84,6 @@ export default function PortfolioPage() {
         amount: token.balance,
         price: token.priceUsd,
         value: token.valueUsd,
-        // TODO: использовать реальное поле change24h, если нужно отображать динамику
         change24h: 2.5,
         percentage: data.totalValueUsd > 0 ? (token.valueUsd / data.totalValueUsd) * 100 : 0,
       }))
@@ -103,8 +98,7 @@ export default function PortfolioPage() {
         bestPerformer: apiAssets[0]?.symbol || 'N/A',
         worstPerformer: apiAssets[apiAssets.length - 1]?.symbol || 'N/A',
       })
-    } catch (error) {
-      console.error('Error fetching portfolio:', error)
+    } catch {
       setError('Failed to load portfolio data')
       setAssets([])
     } finally {
@@ -161,8 +155,7 @@ export default function PortfolioPage() {
         const data = await response.json()
         alert(data.error || 'Failed to delete asset')
       }
-    } catch (error) {
-      console.error('Error deleting asset:', error)
+    } catch {
       alert('Failed to delete asset')
     }
   }
@@ -181,9 +174,8 @@ export default function PortfolioPage() {
         throw new Error(data.error)
       }
       await fetchPortfolio()
-    } catch (error) {
-      console.error('Error adding asset:', error)
-      throw error
+    } catch {
+      // Silent
     }
   }
 
@@ -200,8 +192,7 @@ export default function PortfolioPage() {
       } else {
         alert('Failed to update asset')
       }
-    } catch (error) {
-      console.error('Error updating asset:', error)
+    } catch {
       alert('Failed to update asset')
     }
   }
@@ -287,7 +278,6 @@ export default function PortfolioPage() {
               </div>
             </div>
           </div>
-
           <div className="bg-gradient-to-br from-purple-600/20 to-purple-600/5 border border-purple-600/50 rounded-lg p-8">
             <p className="text-gray-400 text-sm mb-4">Performance Metrics</p>
             <div className="space-y-4">
@@ -327,6 +317,7 @@ export default function PortfolioPage() {
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Value</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">24h Change</th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Actions</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Alert</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-700/50">
@@ -355,6 +346,9 @@ export default function PortfolioPage() {
                         Delete
                       </button>
                     </td>
+                    <td className="px-6 py-4 text-sm">
+                      <AlertButton token={asset.symbol} />
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -362,14 +356,12 @@ export default function PortfolioPage() {
           </div>
         </div>
       )}
-
       <EditAssetModal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
         asset={editingAsset}
         onSave={handleSaveAsset}
       />
-
       <AddAssetModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}

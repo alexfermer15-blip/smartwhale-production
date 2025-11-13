@@ -1,55 +1,60 @@
-// app/api/alerts/create/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 
-export async function POST(req: NextRequest) {
+// Логируем наличие переменных окружения при каждом запуске (можно убрать после отладки)
+console.log('SUPABASE_URL:', process.env.NEXT_PUBLIC_SUPABASE_URL)
+console.log('SUPABASE_SERVICE_KEY:', process.env.SUPABASE_SERVICE_KEY ? 'SET' : 'MISSING')
+
+// Инициализируем клиент Supabase
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_KEY!
+)
+
+export async function POST(request: NextRequest) {
   try {
-    const cookieStore = cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+    // Получаем body из запроса
+    const body = await request.json()
+    console.log('Alert body:', body)
 
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
+    // Распаковка и простейшая валидация входных данных
+    const { walletAddress, alertType, notifyEmail, threshold, targetPrice } = body
+    // Оба варианта поддерживаем для совместимости (threshold или targetPrice)
+    const finalThreshold = threshold ?? targetPrice
 
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!walletAddress || !alertType || finalThreshold == null) {
+      return NextResponse.json(
+        { success: false, error: 'Missing required fields' },
+        { status: 400 }
+      )
     }
 
-    const body = await req.json()
-    const { alertType, conditionType, targetValue, tokenSymbol, whaleAddress } = body
-
-    if (!alertType || !conditionType) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    // Формируем payload для записи
+    const payload = {
+      wallet_address: walletAddress,
+      alert_type: alertType,
+      threshold: finalThreshold,
+      notify_email: notifyEmail || null,
+      created_at: new Date().toISOString(),
+      is_active: true,
     }
+    console.log('Supabase insert:', payload)
 
-    // Создаём алерт
-    const { data: newAlert, error: insertError } = await supabase
-      .from('user_alerts')
-      .insert({
-        user_id: user.id,
-        alert_type: alertType,
-        condition_type: conditionType,
-        target_value: targetValue,
-        token_symbol: tokenSymbol,
-        whale_address: whaleAddress,
-        is_active: true,
-      })
+    // Пишем в таблицу whale_alerts
+    const { data, error } = await supabase
+      .from('whale_alerts')
+      .insert(payload)
       .select()
-      .single()
 
-    if (insertError) {
-      console.error('Insert error:', insertError)
-      return NextResponse.json({ error: insertError.message }, { status: 500 })
-    }
+    if (error) throw error
 
-    return NextResponse.json({
-      success: true,
-      message: 'Alert created successfully',
-      data: newAlert,
-    })
-  } catch (error) {
-    console.error('Error creating alert:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ success: true, data })
+  } catch (error: any) {
+    console.error('Alert creation error:', error)
+    return NextResponse.json(
+      { success: false, error: error?.message || String(error) },
+      { status: 500 }
+    )
   }
 }
+

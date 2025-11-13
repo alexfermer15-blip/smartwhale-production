@@ -1,17 +1,16 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
 
 interface Alert {
   id: string
-  token_symbol: string
-  alert_type?: string
-  price_condition: string
-  target_price: number
-  current_price?: number
+  wallet_address: string
+  alert_type: string
+  threshold: number | null
+  notify_email: string | null
   is_active: boolean
   created_at: string
+  triggered_at: string | null
 }
 
 export default function AlertsPage() {
@@ -26,11 +25,12 @@ export default function AlertsPage() {
   const fetchAlerts = async () => {
     try {
       setLoading(true)
+      setError(null)
       const response = await fetch('/api/alerts/list')
       const data = await response.json()
 
       if (data.success) {
-        setAlerts(data.alerts || [])
+        setAlerts(data.data || [])
       } else {
         setError(data.error || 'Failed to fetch alerts')
       }
@@ -51,7 +51,6 @@ export default function AlertsPage() {
       })
 
       if (response.ok) {
-        // Update local state
         setAlerts(prev =>
           prev.map(alert =>
             alert.id === id ? { ...alert, is_active: !currentState } : alert
@@ -67,10 +66,8 @@ export default function AlertsPage() {
     if (!confirm('Are you sure you want to delete this alert?')) return
 
     try {
-      const response = await fetch('/api/alerts/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
+      const response = await fetch(`/api/alerts/delete?id=${id}`, {
+        method: 'DELETE',
       })
 
       if (response.ok) {
@@ -81,11 +78,41 @@ export default function AlertsPage() {
     }
   }
 
+  const getAlertTypeLabel = (type: string) => {
+    switch (type) {
+      case 'balance':
+        return 'Balance Change'
+      case 'price':
+        return 'Price Alert'
+      case 'transaction':
+        return 'Large Transaction'
+      case 'newtoken':
+        return 'New Token'
+      default:
+        return type.toUpperCase()
+    }
+  }
+
+  const getAlertDescription = (alert: Alert) => {
+    switch (alert.alert_type) {
+      case 'balance':
+        return `Alert when balance changes by ${alert.threshold}%`
+      case 'price':
+        return `Alert when price reaches $${alert.threshold?.toLocaleString()}`
+      case 'transaction':
+        return `Alert for transactions over $${alert.threshold?.toLocaleString()}`
+      case 'newtoken':
+        return 'Alert when wallet purchases a new token'
+      default:
+        return 'Custom alert'
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-950 p-8">
         <div className="max-w-6xl mx-auto">
-          <h1 className="text-3xl font-bold text-white mb-8">Price Alerts</h1>
+          <h1 className="text-3xl font-bold text-white mb-8">Whale Alerts</h1>
           <div className="flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
           </div>
@@ -98,10 +125,12 @@ export default function AlertsPage() {
     <div className="min-h-screen bg-gray-950 p-8">
       <div className="max-w-6xl mx-auto">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-white">Price Alerts</h1>
-          <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition">
-            Create Alert
-          </button>
+          <div>
+            <h1 className="text-3xl font-bold text-white">Whale Alerts</h1>
+            <p className="text-gray-400 mt-2">
+              Manage notifications for whale wallet activity
+            </p>
+          </div>
         </div>
 
         {error && (
@@ -112,13 +141,11 @@ export default function AlertsPage() {
 
         {alerts.length === 0 ? (
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center">
+            <div className="text-6xl mb-4">🔔</div>
             <p className="text-gray-400 text-lg mb-4">No alerts configured</p>
             <p className="text-gray-500 mb-6">
-              Create your first price alert to get notified
+              Go to a whale portfolio page and click "Set Alert" to create your first notification
             </p>
-            <button className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition">
-              Create First Alert
-            </button>
           </div>
         ) : (
           <div className="grid gap-4">
@@ -127,14 +154,11 @@ export default function AlertsPage() {
                 key={alert.id}
                 className="bg-gray-900 border border-gray-800 rounded-xl p-6 hover:border-gray-700 transition"
               >
-                <div className="flex items-center justify-between">
+                <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className="text-xl font-bold text-white">
-                        {alert.token_symbol}
-                      </span>
-                      <span className="px-2 py-1 text-xs font-semibold bg-blue-900/30 text-blue-400 rounded">
-                        {alert.alert_type?.toUpperCase() || 'PRICE'}
+                    <div className="flex items-center gap-3 mb-3">
+                      <span className="text-lg font-bold text-white">
+                        {getAlertTypeLabel(alert.alert_type)}
                       </span>
                       <span
                         className={`px-2 py-1 text-xs font-semibold rounded ${
@@ -147,27 +171,25 @@ export default function AlertsPage() {
                       </span>
                     </div>
 
-                    <div className="text-gray-400 space-y-1">
-                      <p>
-                        Alert when price goes{' '}
-                        <span className="text-white font-semibold">
-                          {alert.price_condition}
-                        </span>{' '}
-                        <span className="text-white font-semibold">
-                          ${alert.target_price.toLocaleString()}
-                        </span>
+                    <div className="text-gray-400 space-y-2">
+                      <p className="text-white font-mono text-sm">
+                        Wallet: {alert.wallet_address.slice(0, 10)}...
+                        {alert.wallet_address.slice(-8)}
                       </p>
-                      {alert.current_price && (
-                        <p className="text-sm">
-                          Current price:{' '}
-                          <span className="text-gray-300">
-                            ${alert.current_price.toLocaleString()}
-                          </span>
+                      <p className="text-gray-300">{getAlertDescription(alert)}</p>
+                      {alert.notify_email && (
+                        <p className="text-sm text-gray-500">
+                          📧 Notifications to: {alert.notify_email}
                         </p>
                       )}
                       <p className="text-xs text-gray-500">
-                        Created: {new Date(alert.created_at).toLocaleDateString()}
+                        Created: {new Date(alert.created_at).toLocaleString()}
                       </p>
+                      {alert.triggered_at && (
+                        <p className="text-xs text-yellow-500">
+                          Last triggered: {new Date(alert.triggered_at).toLocaleString()}
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -192,6 +214,28 @@ export default function AlertsPage() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Stats Summary */}
+        {alerts.length > 0 && (
+          <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
+              <p className="text-gray-400 text-sm">Total Alerts</p>
+              <p className="text-white text-2xl font-bold">{alerts.length}</p>
+            </div>
+            <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
+              <p className="text-gray-400 text-sm">Active Alerts</p>
+              <p className="text-green-400 text-2xl font-bold">
+                {alerts.filter(a => a.is_active).length}
+              </p>
+            </div>
+            <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
+              <p className="text-gray-400 text-sm">Paused Alerts</p>
+              <p className="text-yellow-400 text-2xl font-bold">
+                {alerts.filter(a => !a.is_active).length}
+              </p>
+            </div>
           </div>
         )}
       </div>

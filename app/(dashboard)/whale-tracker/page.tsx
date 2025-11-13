@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import AddWhaleModal from '../components/add-whale-modal'
 
 interface CustomWhale {
@@ -36,7 +37,6 @@ export default function WhaleTrackerPage() {
   const [showModal, setShowModal] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Fetch custom whales from database
   const fetchCustomWhales = async () => {
     try {
       const response = await fetch('/api/whales/custom')
@@ -49,35 +49,24 @@ export default function WhaleTrackerPage() {
     }
   }
 
-  // Fetch real whales from Etherscan
   const fetchWhaleData = async () => {
     try {
       setLoading(true)
       setError(null)
-
-      console.log('🔄 Fetching whale data from Etherscan...')
-
       const response = await fetch('/api/whales')
       const data = await response.json()
-
-      console.log('📦 API Response:', data)
-
       if (data.success) {
         setStats(data.data)
-        console.log('✅ Whale data loaded successfully')
       } else {
         setError(data.message || 'Failed to fetch whale data')
-        console.error('❌ API Error:', data.message)
       }
     } catch (err) {
-      console.error('❌ Error fetching whale data:', err)
       setError('Failed to load whale data. Check your Etherscan API key in .env.local')
     } finally {
       setLoading(false)
     }
   }
 
-  // Add custom whale
   const handleAddWhale = async (data: { address: string; name: string; notes: string }) => {
     setIsSubmitting(true)
     try {
@@ -86,31 +75,23 @@ export default function WhaleTrackerPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       })
-
       if (!response.ok) {
         const json = await response.json()
         throw new Error(json.error || 'Failed to add whale')
       }
-
       await fetchCustomWhales()
       setShowModal(false)
     } catch (err) {
-      console.error('Error adding whale:', err)
       alert(err instanceof Error ? err.message : 'Failed to add whale')
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  // Delete custom whale
   const handleDeleteWhale = async (whaleId: string) => {
     if (!confirm('Are you sure you want to delete this whale?')) return
-
     try {
-      const response = await fetch(`/api/whales/custom?id=${whaleId}`, {
-        method: 'DELETE',
-      })
-
+      const response = await fetch(`/api/whales/custom?id=${whaleId}`, { method: 'DELETE' })
       if (response.ok) {
         setCustomWhales(customWhales.filter((w) => w.id !== whaleId))
       } else {
@@ -118,7 +99,6 @@ export default function WhaleTrackerPage() {
         throw new Error(json.error || 'Failed to delete whale')
       }
     } catch (err) {
-      console.error('Error deleting whale:', err)
       alert(err instanceof Error ? err.message : 'Failed to delete whale')
     }
   }
@@ -139,16 +119,11 @@ export default function WhaleTrackerPage() {
     return `$${num.toFixed(2)}`
   }
 
-  const formatETH = (eth: number): string => {
-    return eth.toLocaleString('en-US', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })
-  }
+  const formatETH = (eth: number): string =>
+    eth.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-  const shortenAddress = (address: string): string => {
-    return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`
-  }
+  const shortenAddress = (address: string): string =>
+    `${address.substring(0, 6)}...${address.substring(address.length - 4)}`
 
   if (loading && !stats) {
     return (
@@ -174,7 +149,6 @@ export default function WhaleTrackerPage() {
           <h1 className="text-3xl font-bold text-white mb-2">Real Whale Tracker</h1>
           <p className="text-gray-400">Track real whales + add custom addresses</p>
         </div>
-
         <div className="flex gap-3">
           <button
             onClick={() => setShowModal(true)}
@@ -193,7 +167,6 @@ export default function WhaleTrackerPage() {
           </button>
         </div>
       </div>
-
       {/* Error Message */}
       {error && (
         <div className="bg-red-900/20 border border-red-500 rounded-lg p-4">
@@ -207,7 +180,6 @@ export default function WhaleTrackerPage() {
           </button>
         </div>
       )}
-
       {/* Stats Cards */}
       {stats && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -216,19 +188,16 @@ export default function WhaleTrackerPage() {
             <div className="text-2xl font-bold text-white">{formatNumber(stats.totalValue)}</div>
             <div className="text-xs text-blue-400 mt-1">📊 Real ETH Holders</div>
           </div>
-
           <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 rounded-xl p-6 hover:border-green-500/50 transition">
             <div className="text-sm text-gray-400 mb-2">Whales Tracked</div>
             <div className="text-2xl font-bold text-white">{stats.whaleCount}</div>
             <div className="text-xs text-green-400 mt-1">🔵 Live Updates</div>
           </div>
-
           <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 rounded-xl p-6 hover:border-yellow-500/50 transition">
             <div className="text-sm text-gray-400 mb-2">Market Impact</div>
             <div className="text-2xl font-bold text-white">{stats.marketImpact.toFixed(3)}%</div>
             <div className="text-xs text-yellow-400 mt-1">⚡ High Influence</div>
           </div>
-
           <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 rounded-xl p-6 hover:border-purple-500/50 transition">
             <div className="text-sm text-gray-400 mb-2">Network</div>
             <div className="text-2xl font-bold text-white">Ethereum</div>
@@ -236,8 +205,7 @@ export default function WhaleTrackerPage() {
           </div>
         </div>
       )}
-
-      {/* Custom Whales Section */}
+      {/* Custom Whales */}
       {customWhales.length > 0 && (
         <div className="space-y-3">
           <h2 className="text-xl font-bold text-white">📌 Your Custom Whales</h2>
@@ -267,7 +235,6 @@ export default function WhaleTrackerPage() {
           </div>
         </div>
       )}
-
       {/* Real Whales Table */}
       {stats && stats.whales.length > 0 && (
         <div className="space-y-3">
@@ -279,41 +246,34 @@ export default function WhaleTrackerPage() {
                   <tr className="bg-slate-800/50 border-b border-slate-700">
                     <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">#</th>
                     <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Label</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
-                      Wallet Address
-                    </th>
-                    <th className="px-6 py-4 text-right text-sm font-semibold text-gray-300">
-                      ETH Balance
-                    </th>
-                    <th className="px-6 py-4 text-right text-sm font-semibold text-gray-300">
-                      USD Value
-                    </th>
-                    <th className="px-6 py-4 text-right text-sm font-semibold text-gray-300">
-                      Actions
-                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Wallet Address</th>
+                    <th className="px-6 py-4 text-right text-sm font-semibold text-gray-300">ETH Balance</th>
+                    <th className="px-6 py-4 text-right text-sm font-semibold text-gray-300">USD Value</th>
+                    <th className="px-6 py-4 text-right text-sm font-semibold text-gray-300">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {stats.whales.map((whale, index) => (
                     <tr
                       key={whale.address}
-                      className="border-b border-slate-800 hover:bg-slate-800/30 transition cursor-pointer"
-                      onClick={() => window.open(`https://etherscan.io/address/${whale.address}`, '_blank')}
+                      className="border-b border-slate-800 hover:bg-slate-800/30 transition"
                     >
                       <td className="px-6 py-4 text-gray-400">{index + 1}</td>
                       <td className="px-6 py-4">
-                        <span className="text-white font-medium">{whale.label || 'Unknown Whale'}</span>
+                        <Link
+                          href={`/whale/${whale.address}`}
+                          className="text-white font-medium hover:text-blue-400 transition"
+                        >
+                          {whale.label || 'Unknown Whale'}
+                        </Link>
                       </td>
                       <td className="px-6 py-4">
-                        <a
-                          href={`https://etherscan.io/address/${whale.address}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <Link
+                          href={`/whale/${whale.address}`}
                           className="text-blue-400 hover:text-blue-300 transition font-mono text-sm"
-                          onClick={(e) => e.stopPropagation()}
                         >
                           {shortenAddress(whale.address)}
-                        </a>
+                        </Link>
                       </td>
                       <td className="px-6 py-4 text-right">
                         <span className="text-green-400 font-semibold">
@@ -326,23 +286,20 @@ export default function WhaleTrackerPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <button
+                        <a
+                          href={`https://etherscan.io/address/${whale.address}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           className="px-3 py-1 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded text-sm transition"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            window.open(`https://etherscan.io/address/${whale.address}`, '_blank')
-                          }}
                         >
                           View on Etherscan
-                        </button>
+                        </a>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-
-            {/* Footer */}
             <div className="p-4 bg-slate-800/30 border-t border-slate-700">
               <p className="text-xs text-gray-500 text-center">
                 💾 Data source: Etherscan API V2 • Updated in real-time • Network: Ethereum (Chain ID: 1)
@@ -351,8 +308,6 @@ export default function WhaleTrackerPage() {
           </div>
         </div>
       )}
-
-      {/* No Data Message */}
       {stats && stats.whales.length === 0 && !error && (
         <div className="bg-slate-900 border border-slate-700 rounded-xl p-12 text-center">
           <p className="text-2xl mb-2">🐋</p>
@@ -367,8 +322,6 @@ export default function WhaleTrackerPage() {
           </button>
         </div>
       )}
-
-      {/* Add Whale Modal */}
       <AddWhaleModal
         isOpen={showModal}
         onClose={() => setShowModal(false)}

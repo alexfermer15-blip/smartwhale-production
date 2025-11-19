@@ -1,10 +1,8 @@
 // app/api/whales/track/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { TOP_ETHEREUM_WHALES, WHALE_LABELS } from '../../../../lib/whale-addresses'
-import { createServerClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import { AlchemyService } from '@/lib/services/alchemyService'
-import { cookies } from 'next/headers'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 
 // Используем расширенный список whale адресов
 const KNOWN_WHALES = TOP_ETHEREUM_WHALES.map((address: string) => ({
@@ -20,8 +18,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const cookieStore = cookies()
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
+    const supabase = createClient()
     const alchemy = new AlchemyService()
 
     let totalActivities = 0

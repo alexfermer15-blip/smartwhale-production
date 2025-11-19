@@ -167,6 +167,15 @@ export default function WhaleTrackerPage() {
           </button>
         </div>
       </div>
+      {/* Loading overlay when refreshing data */}
+      {loading && stats && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <p className="text-gray-400">Loading whale data from Etherscan...</p>
+          </div>
+        </div>
+      )}
       {/* Error Message */}
       {error && (
         <div className="bg-red-900/20 border border-red-500 rounded-lg p-4">

@@ -1,77 +1,50 @@
 // app/api/whales/route.ts
 import { NextResponse } from 'next/server'
+import { TOP_ETHEREUM_WHALES, WHALE_LABELS } from '../../../lib/whale-addresses'
 
 export const dynamic = 'force-dynamic'
 
-const MOCK_WHALE_DATA = {
-  whales: [
-    {
-      address: '0x00000000219ab540356cBB839Cbe05303d7705Fa',
-      balance: 34200000,
-      balanceUSD: 119700000000,
-      label: 'ETH 2.0 Staking Contract',
-      percentChange24h: 2.3,
-    },
-    {
-      address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
-      balance: 3150000,
-      balanceUSD: 11025000000,
-      label: 'Wrapped ETH (WETH)',
-      percentChange24h: 0.5,
-    },
-    {
-      address: '0xDA9dfA130Df4dE4673b89022EE50ff26f6EA73Cf',
-      balance: 1520000,
-      balanceUSD: 5320000000,
-      label: 'Kraken Exchange',
-      percentChange24h: -1.2,
-    },
-    {
-      address: '0xBE0eB53F46cd790Cd82837007B7aBa1e7d7D0eF5',
-      balance: 620000,
-      balanceUSD: 2170000000,
-      label: 'Binance Hot Wallet',
-      percentChange24h: 1.8,
-    },
-    {
-      address: '0x28C6c06298d514Db089934071355E5743bf21d60',
-      balance: 510000,
-      balanceUSD: 1785000000,
-      label: 'Binance Cold Storage',
-      percentChange24h: 0.1,
-    },
-    {
-      address: '0x21a31Ee1afC51d94C2eFcCAa2092aD1028285549',
-      balance: 385000,
-      balanceUSD: 1347500000,
-      label: 'Bitfinex Wallet',
-      percentChange24h: -0.5,
-    },
-    {
-      address: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
-      balance: 320000,
-      balanceUSD: 1120000000,
-      label: 'Kraken Cold Storage',
-      percentChange24h: 0.8,
-    },
-  ],
-  totalValue: 142467500000,
-  totalETH: 40705000,
-  whaleCount: 7,
-  marketImpact: 3.56,
-  ethPrice: 3500,
+// Generate mock whale data using the extended whale addresses list
+function generateMockWhaleData() {
+  const mockWhales = TOP_ETHEREUM_WHALES.map((address, index) => {
+    const balance = Math.floor(Math.random() * 10000000) + 10000 // Random balance between 100k-10M ETH
+    const balanceUSD = balance * 3500 // Assuming $3500 ETH price
+    const percentChange24h = (Math.random() * 10 - 5).toFixed(2) // Random change between -5% and +5%
+    
+    return {
+      address,
+      balance,
+      balanceUSD,
+      label: WHALE_LABELS[address] || `Whale ${address.slice(0, 6)}...`,
+      percentChange24h: parseFloat(percentChange24h),
+    }
+  })
+
+  const totalValue = mockWhales.reduce((sum, whale) => sum + whale.balanceUSD, 0)
+  const totalETH = mockWhales.reduce((sum, whale) => sum + whale.balance, 0)
+
+  return {
+    whales: mockWhales, // Return all whales from the extended list
+    totalValue,
+    totalETH,
+    whaleCount: mockWhales.length,
+    marketImpact: Number(((totalValue / 100000 * 100)).toFixed(2)), // Percentage of total market cap
+    ethPrice: 3500,
+  }
 }
 
 export async function GET() {
   try {
-    console.log('🐋 Whale API: Returning mock data')
+    console.log('🐋 Whale API: Returning mock data based on extended whale list')
     
     await new Promise(resolve => setTimeout(resolve, 300))
+    
+    const mockData = generateMockWhaleData()
     
     return NextResponse.json(
       {
         success: true,
-        data: MOCK_WHALE_DATA,
+        data: mockData,
         timestamp: new Date().toISOString(),
         mock: true,
       },

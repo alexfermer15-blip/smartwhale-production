@@ -1,27 +1,16 @@
 // app/api/whales/track/route.ts
 import { NextRequest, NextResponse } from 'next/server'
+import { TOP_ETHEREUM_WHALES, WHALE_LABELS } from '../../../../lib/whale-addresses'
 import { createServerClient } from '@/lib/supabase/server'
 import { AlchemyService } from '@/lib/services/alchemyService'
+import { cookies } from 'next/headers'
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 
-// Известные whale адреса
-const KNOWN_WHALES = [
-  {
-    address: '0xF977814e90dA44bFA03b6295A0616a897441aceC',
-    label: 'Binance Cold Wallet 5',
-  },
-  {
-    address: '0x28C6c06298d514Db089934071355E5743bf21d60',
-    label: 'Binance Cold Wallet 2',
-  },
-  {
-    address: '0x742d35Cc6634C0532925a3b844Bc454e4438f44e',
-    label: 'Whale 0x742d',
-  },
-  {
-    address: '0x21a31Ee1afC51d94C2eFcCAa2092aD1028285549',
-    label: 'Whale 0x21a3',
-  },
-]
+// Используем расширенный список whale адресов
+const KNOWN_WHALES = TOP_ETHEREUM_WHALES.map((address: string) => ({
+  address,
+  label: WHALE_LABELS[address] || `Whale ${address.slice(0, 6)}...`
+}))
 
 export async function POST(req: NextRequest) {
   try {
@@ -39,7 +28,7 @@ export async function POST(req: NextRequest) {
 
     // Отслеживаем каждого кита
     for (const whale of KNOWN_WHALES) {
-      const transfers = await alchemy.getAssetTransfers(whale.address, '0x' + (Date.now() - 86400000).toString(16))
+      const transfers = await alchemy.getAssetTransfers(whale.address, '0x' + (Date.now() - 864000).toString(16))
 
       for (const transfer of transfers) {
         // Определяем тип транзакции
